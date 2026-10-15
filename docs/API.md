@@ -277,8 +277,8 @@ note to the slot window, so nobody picks Razor's and goes looking for what they 
 
 The table is J0nathan550's pass through every arcana on 2026-10-15 (pull request #275). A hero
 here by its id as items_game names it (npc_dota_hero_<id>). An arcana of a hero who is in neither
-list, one Valve adds later, is not checked yet and says so. Io has no arcana, but none of its
-items had been offered before, so all of them say they are not checked either.
+list, one Valve adds later, is not checked yet and says so. None of Io's items had been offered
+before, its arcana (Benevolent Companion) among them, so all of them say they are not checked.
 
 The notes are written in Russian, the app's source language, and translated where they are shown
 (src/i18n.ts).
@@ -298,8 +298,8 @@ note to the slot window, so nobody picks Razor's and goes looking for what they 
 
 The table is J0nathan550's pass through every arcana on 2026-10-15 (pull request #275). A hero
 here by its id as items_game names it (npc_dota_hero_<id>). An arcana of a hero who is in neither
-list, one Valve adds later, is not checked yet and says so. Io has no arcana, but none of its
-items had been offered before, so all of them say they are not checked either.
+list, one Valve adds later, is not checked yet and says so. None of Io's items had been offered
+before, its arcana (Benevolent Companion) among them, so all of them say they are not checked.
 
 The notes are written in Russian, the app's source language, and translated where they are shown
 (src/i18n.ts).
