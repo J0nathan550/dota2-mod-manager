@@ -535,6 +535,9 @@ that location is not writable.
 | `src/schema-service.ts`, `src/schema-cosmetics.ts`, `src/schema-harvest.ts` | The item table as the app keeps it: the build and the repair, the free cosmetics, and a mod's own blocks |
 | `src/cosmetic-names.ts` | Official Chinese item names from the installed game's localization tokens; read-only and cached per game build |
 | `src/item-builder.ts`, `src/item-builder-slots.ts`, `src/item-builder-effects.ts` | The item builder: what it offers each hero and slot, the effects, and what a pick writes |
+| `src/item-builder-styles.ts` | An item's styles, and its visuals with the chosen one made its only one: a pick in another style rides in its effect key as `style-N` |
+| `src/item-builder-assets.ts` | What a pick needs beyond its block: the game's files under the plain paths (models, particles, an arcana's hero model) and the sounds and voice it switches |
+| `src/item-sounds.ts` | An item's sounds and an arcana's voice, which the server gives only to the item's owner: the plain sound events rewritten as the item's in the game's soundevents files, every pick's in one copy of each |
 | `src/notice-text.ts`, `src/notice-texts.ts` | The game's anti-cheat notice in words that say what to do, in every language Dota ships |
 | `src/terrain-age.ts` | Terrains that replace the whole map, and whether the game's map has moved on since |
 | `src/mod-id.ts`, `src/fingerprints.ts`, `src/hero-names.ts` | What a mod replaces, asked of the game; recognising a file somebody else installed; which hero a name means |

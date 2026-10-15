@@ -31,6 +31,8 @@ export interface SlotPickerModel {
   query: string;
   slotIcon: string;
   options: OptionCard[];
+  /** the chosen item's styles; null when it has one look */
+  styles: { index: number; name: string; picked: boolean }[] | null;
   /** null when the slot takes no effects */
   effects: { none: boolean; list: EffectCard[]; enabled: boolean; hint: string } | null;
   summary: { name: string; effects: string };
@@ -42,6 +44,7 @@ export interface SlotPickerActions {
   close: () => void;
   search: (q: string) => void;
   choose: (id: string) => void;
+  style: (index: number) => void;
   effect: (id: string) => void;
   apply: () => void;
 }

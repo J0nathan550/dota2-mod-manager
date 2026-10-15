@@ -1,5 +1,5 @@
-/* One slot of a hero: its wearables to choose from, the effects to put on top, and the button that
- * puts the choice on. Nothing reaches the game until it is pressed (views/item-builder.ts,
+/* One slot of a hero: its wearables to choose from, the chosen one's styles when it has several,
+ * the effects to put on top, and the button that puts the choice on. Nothing reaches the game until it is pressed (views/item-builder.ts,
  * stagedItemAction): a pick used to be written on every click. The card the border marks is the
  * one chosen here; "Надето" is said only of what the game shows. */
 import { catalogName } from '../../ui/catalog-name.ts';
@@ -35,6 +35,20 @@ export function SlotPicker({ m, actions }: { m: SlotPickerModel; actions: SlotPi
           </button>
         )) : <EmptySearch onClear={clear} />}
       </div>
+      {m.styles && (
+        <>
+          <div className="section-h item-fx-head"><span className="ms">palette</span>{L`Стиль`}</div>
+          <div className="item-pick-grid" id="styleGrid">
+            {m.styles.map((s) => (
+              <button key={s.index} className={`card item-pick-card ${s.picked ? 'picked' : ''}`} data-style={s.index}
+                style={{ '--i': s.index } as CSSProperties} aria-pressed={s.picked} onClick={() => actions.style(s.index)}>
+                <div className="card-media"><div className="noimg"><span className="ms">palette</span></div></div>
+                <div className="card-body"><div className="card-name" title={s.name}>{s.name}</div></div>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
       {m.effects && (
         <>
           <div className="section-h item-fx-head"><span className="ms">auto_awesome</span>{L`Эффекты`}</div>

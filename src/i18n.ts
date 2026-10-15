@@ -115,6 +115,7 @@ const EN = {
   'второй предмет на тот же слот': 'a second item for the same slot',
   'персона: конструктор их не меняет': 'a persona: the builder leaves those alone',
   'Не найдена модель героя {0}': 'The model of hero {0} was not found',
+  'Стиль {0}': 'Style {0}',
   'для него нет слота в конструкторе': 'the builder has no slot for it',
   'Набор не найден': 'Set not found',
   'items_game: эффект {0} не найден': 'items_game: effect {0} not found',

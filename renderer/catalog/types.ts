@@ -43,6 +43,8 @@ export interface CosmeticOption {
   id: string;
   name: string;
   tags?: string[];
+  /** an item builder wearable's styles by name, when it has more than one (src/item-builder-styles.ts) */
+  styles?: string[];
 }
 
 /** A slot of free cosmetics, or one of the item builder's (kind 'item-effect', slot 'item:...'). */

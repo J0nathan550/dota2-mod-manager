@@ -5,7 +5,7 @@ import * as schema from './schema.ts';
 import * as itemBuilder from './item-builder.ts';
 import { t } from './i18n.ts';
 import { getLang } from './i18n.ts';
-import { chineseCosmeticNames } from './cosmetic-names.ts';
+import { chineseCosmeticNames, styleNamer } from './cosmetic-names.ts';
 import type { Settings } from './settings.ts';
 import type { Library } from './library.ts';
 import type { LibRecord } from './types.ts';
@@ -54,10 +54,12 @@ export function createCosmetics({ library, settings, gamePath, vanilla, refresh 
       const sets = itemBuilder.itemSets(text, itemSlots);
       const effects = itemBuilder.itemEffects();
       if (itemSlots.length && effects.length) {
+        const styleName = styleNamer(game, getLang(), (i) => t('Стиль {0}', i + 1));
         const entries = itemSlots.map((it) => {
           const rec = cosmeticRecordFor(it.slot);
           return {
             ...it,
+            options: it.options.map((o) => (o.styles ? { ...o, styles: o.styles.map(styleName) } : o)),
             picked: rec ? rec.itemId : null,
             pickedEffect: rec ? (rec.effectId || '') : '',
             recordId: rec ? rec.id : null,

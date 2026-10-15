@@ -196,7 +196,7 @@ const EN = {
   'Надето: {0}': 'Equipped: {0}',
   'Надеть': 'Equip',
   'Надеваю…': 'Equipping…',
-  'Сохранить эффекты': 'Save effects',
+  'Сохранить эффекты': 'Save effects', 'Сохранить стиль': 'Save style', 'Стиль': 'Style', 'стиль {0}': 'style {0}',
   'Вернуть стандартный': 'Back to default',
   'Можно выбрать несколько. Иней и Снег держатся не на всех моделях.':
     'You can pick several. Frostbloom and Snow do not hold on every model.',

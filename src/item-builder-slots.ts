@@ -13,11 +13,21 @@
 import { heroDisplayName } from './vpk.ts';
 import { t } from './i18n.ts';
 import { listItems, toUtf8, eachChild, blockBounds, itemSearchText, inferredItemSlot, type SchemaItem } from './schema.ts';
+import { styleTokens } from './item-builder-styles.ts';
 
 /** A slot of a hero the builder can dress, and the paid items that fit it. */
 export interface ItemSlot {
   slot: string; kind: 'item-effect'; base: string; targetId: string; equipSlot: string; heroIds: string[];
-  heroLabel: string; slotLabel: string; label: string; icon: string; options: { id: string; name: string }[];
+  heroLabel: string; slotLabel: string; label: string; icon: string;
+  /** `styles`: the name token of each style, for an item with more than one (src/item-builder-styles.ts) */
+  options: { id: string; name: string; styles?: string[] }[];
+}
+
+/** An item's visuals block, as text; null when it has none. */
+function visualsOf(text: string, item: { start: number }): string | null {
+  let out: string | null = null;
+  eachChild(text, blockBounds(text, item.start), (c) => { if (!out && c.isBlock && c.key.toLowerCase() === 'visuals') out = text.slice(c.start, c.end); });
+  return out;
 }
 
 /** One piece of a set: where it goes, or why it does not. */
@@ -174,7 +184,8 @@ export function itemSlots(text: string): ItemSlot[] {
       if (hits.length === 1) target = slots.get(hits[0]) || null;
     }
     if (!target) continue;
-    target.options.push({ id: item.id, name: toUtf8(item.name) });
+    const styles = text.slice(item.start, item.end).includes('"styles"') ? styleTokens(visualsOf(text, item)) : [];
+    target.options.push({ id: item.id, name: toUtf8(item.name), ...(styles.length ? { styles } : {}) });
   }
 
   const order = new Map(ITEM_SLOT_ORDER.map((slot, i) => [slot, i]));

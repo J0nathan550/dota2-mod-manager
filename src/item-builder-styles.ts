@@ -67,7 +67,8 @@ export function withStyle(visuals: string, style: number): { visuals: string; mo
     eachChild(visuals, c.body!, (f) => { if (!f.isBlock && f.key.toLowerCase() === 'style') at = f.value ?? ''; });
     if (at === null) return;
     const text = visuals.slice(c.start, c.end);
-    cuts.push({ start: c.start, end: c.end, text: at === String(style) ? text.replace(/("style"\s+")\d+(")/i, '$10$2') : '' });
+    if (at === String(style)) cuts.push({ start: c.start, end: c.end, text: text.replace(/("style"\s+")\d+(")/i, '$10$2') });
+    else cuts.push({ start: c.start - (/[ \t]*\r?\n[ \t]*$/.exec(visuals.slice(0, c.start))?.[0].length ?? 0), end: c.end, text: '' }); // its line too
   });
   let out = visuals;
   for (const cut of cuts.sort((a, b) => b.start - a.start)) out = out.slice(0, cut.start) + cut.text + out.slice(cut.end);

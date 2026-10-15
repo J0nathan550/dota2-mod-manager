@@ -64,9 +64,12 @@ the code, not in this page.
 | [`src/installer-write.ts`](#srcinstaller-writets) | Writing a mod into the game folder and taking it out again (src/installer.ts is the door): a |
 | [`src/installer.ts`](#srcinstallerts) | The installer: everything that writes a mod into the game folder or takes it out again. The |
 | [`src/ipc.ts`](#srcipcts) | Every IPC module, registered in one place over the context src/main.ts builds. A new |
+| [`src/item-builder-assets.ts`](#srcitem-builder-assetsts) | What an item builder pick needs beyond its block in items_game: the game's files it puts under |
 | [`src/item-builder-effects.ts`](#srcitem-builder-effectsts) | The particle effects the item builder can put on top of an item: the effect's id, its name in |
 | [`src/item-builder-slots.ts`](#srcitem-builder-slotsts) | The item builder's offer: for each hero, the slots it can dress, the paid wearables that fit |
+| [`src/item-builder-styles.ts`](#srcitem-builder-stylests) | An item's styles in the item builder: which ones it has, and its visuals with one of them made |
 | [`src/item-builder.ts`](#srcitem-builderts) | The item builder: a hero's stock item built from one of its wearables, with an effect on top. |
+| [`src/item-sounds.ts`](#srcitem-soundsts) | An item's sounds and voice, as a mod gives them to a hero who does not own the item. |
 | [`src/item-visuals.ts`](#srcitem-visualsts) | What an item does to the game, read from its block in items_game ("visuals"), and what a mod |
 | [`src/kv3-blobs.ts`](#srckv3-blobsts) | Binary blobs in a KV3 block (src/kv3.ts): where they lie, how they are read, and how they are |
 | [`src/kv3-cells.ts`](#srckv3-cellsts) | The numbers in a parsed KV3 block (src/kv3.ts): read one where it lies, change it there, and the |
@@ -749,6 +752,19 @@ export function cosmeticNameTable(items: Pick<SchemaItem, 'name' | 'itemName'>[]
 ```
 
 Resolve by item_name token, never by guessing a translation from the English title.
+
+### `styleNamer`
+
+```ts
+export function styleNamer(game: string, lang: string, fallback: (index: number) => string): (token: string, index: number) => string
+```
+
+An item style's name in the app's language, from the game's own localization by the style's
+token (#DOTA_Style_Bladeform_Legacy_1); "Стиль 2" for a token the game has no text for.
+
+```
+@param lang  the app's language (src/i18n.ts getLang)
+```
 
 ### `chineseCosmeticNames`
 
@@ -2790,6 +2806,65 @@ export function registerIpc(ctx: AppContext): void
 
 Register every channel the window can call.
 
+## src/item-builder-assets.ts
+
+What an item builder pick needs beyond its block in items_game: the game's files it puts under
+the plain paths (models, particles, the hero's own model), and the sounds and voice it makes the
+hero's own (src/item-sounds.ts writes those). src/item-builder.ts makes the block and asks this
+for the rest; the build reads the files out of pak01 here, in gameAssetEntries.
+
+### `ItemAssets`
+
+```ts
+export interface ItemAssets { assetCopies: AssetCopy[]; sounds: SoundSwap[]; voices: VoiceCue[] }
+```
+
+What a pick asks of the game's files, beside its block.
+
+### `normalizeAssetPath`
+
+```ts
+export function normalizeAssetPath(p: unknown): string
+```
+
+_No description in the source._
+
+### `itemAssets`
+
+```ts
+export function itemAssets(text: string, visuals: string, heroes: string[]): ItemAssets
+```
+
+The files an item's visuals swap, to stage under the plain paths: particles, models, and the
+hero's own model (an arcana's entity_model) with the item's activity modifiers to take off it;
+and the sound events and voice it switches, which the server only switches for its owner.
+
+Only the first style's: the patch leaves the item in its first style, which is the chosen one
+written as the first (src/item-builder-styles.ts). Bladeform Legacy swaps every one of its
+particles twice, once per style, and the second would have won.
+
+Only what the hero has on without the item. An entity_model for another unit is left alone:
+Rubick's arcana reshapes Spirit Bear and a dozen other heroes' summons for when he steals them.
+So is a model swap for anything but a stock item of the hero's: Queen of Pain's arcana lists 40,
+nearly all refits of paid shoulders to its body, and under their plain paths everyone wearing
+one would have the refit (and one of them is not in the game's files at all). The stock ones are
+what is worn under the arcana: Zeus's vest and bracers become an invisible box, its body has them.
+Some items number their entries (asset_modifier0, asset_modifier1: Zeus's and Phantom Assassin's
+arcanas), and those were read as no entries at all.
+
+```
+@param text  items_game, for the hero's stock models
+@param heroes  the item's heroes, npc_dota_hero_*
+```
+
+### `gameAssetEntries`
+
+```ts
+export function gameAssetEntries(gamePath: string, assetCopies: AssetCopy[] | null | undefined): VpkEntry[]
+```
+
+Read compiled asset bytes out of pak01 and stage them under the renamed path in our VPK.
+
 ## src/item-builder-effects.ts
 
 The particle effects the item builder can put on top of an item: the effect's id, its name in
@@ -2948,6 +3023,46 @@ export function itemHeroes(text: string, item: { start: number }): string[]
 
 The heroes an item block says it is used by, as npc_dota_hero_* ids.
 
+## src/item-builder-styles.ts
+
+An item's styles in the item builder: which ones it has, and its visuals with one of them made
+its only one.
+
+A worn item is in a style the player chose in the game, and its visuals carry every style at
+once: an entry marked "style" "1" applies in the second one only, and the style's own block says
+which material the model takes ("skin") and sometimes another model. A stock item is in its first
+style and nobody can choose another, so a pick in style N is written as an item whose only style
+is N's, under the number 0: its entries marked N relabelled 0, every other style's taken out.
+The game then shows the item in it, and the files the build copies (src/item-builder-assets.ts)
+are that style's. The first style is the item as the builder always wrote it.
+
+### `styleTokens`
+
+```ts
+export function styleTokens(visuals: string | null): string[]
+```
+
+The name token of each of an item's styles, in their order ("#DOTA_Style_..."); [] for an item with one look.
+
+### `styleOf`
+
+```ts
+export const styleOf = (key: string): number => Number(/(?:^|,)style-(\d+)(?:,|$)/.exec(key)?.[1] || 0)
+```
+
+A pick's style out of its options' key (src/item-builder.ts effectKey): "style-2" is 2, none is 0.
+
+### `withStyle`
+
+```ts
+export function withStyle(visuals: string, style: number): { visuals: string; model: string | null; applied: boolean }
+```
+
+The visuals with style `style` made the item's only one, and the model that style puts on the
+item instead of its own (null: its own). Style 0, or a style the item has not got, leaves the
+visuals as they are (`applied` false): the builder strips the styles, which leaves the item in
+its first.
+
 ## src/item-builder.ts
 
 The item builder: a hero's stock item built from one of its wearables, with an effect on top.
@@ -2975,6 +3090,8 @@ Hands on from [`src/item-builder-slots.ts`](#srcitem-builder-slotsts): `itemSlot
 
 Hands on from [`src/item-builder-effects.ts`](#srcitem-builder-effectsts): `itemEffects`.
 
+Hands on from [`src/item-builder-assets.ts`](#srcitem-builder-assetsts): `gameAssetEntries`.
+
 ### `effectKey`
 
 ```ts
@@ -2985,6 +3102,11 @@ The effects of one pick as one string: ids in the order ITEM_EFFECTS lists them,
 comma separated, '' for none. A pick carries several (the window says "you can pick several"),
 and this is how a record stores them and how two picks are told apart, so "fire,snow" and
 "snow,fire" are the same pick.
+
+A style other than the item's first goes last, as "style-2" (src/item-builder-styles.ts). It
+rides in the same string so that a record, a preset and a shared link carry it as they carry the
+effects, with nothing new to keep in step; the first style is no token at all, which keeps every
+pick made before styles could be chosen the same pick.
 
 ### `defaultItemForWearable`
 
@@ -2997,24 +3119,84 @@ The stock default_item that matches a wearable by slot and by the hero(es) that 
 ### `itemEffectPatch`
 
 ```ts
-export function itemEffectPatch(baseText: string, itemId: string | number, effectIds: string | string[] | null | undefined): { id: string; block: string; assetCopies: AssetCopy[] }
+export function itemEffectPatch(baseText: string, itemId: string | number, effectIds: string | string[] | null | undefined): { id: string; block: string } & ItemAssets
 ```
 
 Turn one paid wearable into the hero's stock item for that slot.
 
 The block stays the donor item almost verbatim: only the header is rewritten to the matching
 default_item (id + name + prefab), styles/unlocks that cannot be used on a free base item are
-dropped, and the chosen effect is inserted into visuals. The donor model/particles stay named
-as the paid item in items_game, while assetCopies still describe the stock-path overrides the
-built VPK should carry.
+dropped (the chosen style, if not the first, stays as the only one: src/item-builder-styles.ts),
+and the chosen effect is inserted into visuals. The donor model/particles stay named as the paid
+item in items_game, while assetCopies still describe the stock-path overrides the built VPK
+should carry, and sounds and voices the soundevents it rewrites (src/item-sounds.ts).
 
-### `gameAssetEntries`
+## src/item-sounds.ts
+
+An item's sounds and voice, as a mod gives them to a hero who does not own the item.
+
+The item builder's patch tells the game the stock item is the paid one, and the game draws it so.
+It does not make the game sound like it. Which sound plays is the server's choice, made from
+what the server knows the player owns: Bracers of the Cavern Luminar switch Hero_EarthShaker.Totem
+to Hero_EarthShaker.Totem.Immortal, and Planetfall sets the response criterion "eartharc_cosmos"
+that Earthshaker's response rules ask for before they speak an arcana line. A player who does not
+own them hears the plain totem and the plain voice, offline as online.
+
+The client only gets the name of the event to play, and plays what its own soundevents files say
+that event is. So the mod rewrites those files: the plain event becomes a copy of the item's.
+- a sound swap (`sound` in the item's visuals) is one event copied over another;
+- a voice (`response_criteria`) is every plain line of the hero's response rules made a copy of
+  an arcana line said in the same situation: the rule asking for the item's criterion whose other
+  requirements are the plain rule's, or failing that the one of the same concept that asks for
+  the fewest more. Lines the item has no situation for keep the plain voice.
+Two picks for one hero rewrite the same file, so every pick's changes go into one copy of it.
+
+### `SoundSwap`
 
 ```ts
-export function gameAssetEntries(gamePath: string, assetCopies: AssetCopy[] | null | undefined): VpkEntry[]
+export interface SoundSwap { sound: string; as: string }
 ```
 
-Read compiled asset bytes out of pak01 and stage them under the renamed path in our VPK.
+An event to play as another: the one the server names, and the one the player hears.
+
+### `VoiceCue`
+
+```ts
+export interface VoiceCue { hero: string; key: string; value: string }
+```
+
+A response criterion an item sets for a hero ("customresponse" = "eartharc_cosmos").
+
+### `detached`
+
+```ts
+export function detached(kv: Kv3Block, n: Kv3Node): Kv3Node
+```
+
+A node out of one block, to put into another: a number read from a block points into that
+block's buffers, so it takes its bytes along (src/kv3-write.ts writes `raw` when it has it).
+
+### `voiceSwaps`
+
+```ts
+export function voiceSwaps(rules: Kv3Node, cue: Pick<VoiceCue, 'key' | 'value'>): SoundSwap[]
+```
+
+The plain lines of a hero, each as the item's line for the same situation (see the top of the
+file). A plain line already given one keeps it: a line can be in several rules.
+
+### `soundEntries`
+
+```ts
+export function soundEntries(gamePath: string, swaps: SoundSwap[], cues: VoiceCue[]): VpkEntry[]
+```
+
+The soundevents files that make these swaps and voices, each rewritten once with all of them.
+An event the game no longer has is passed over: items_game names a few dozen of those.
+
+```
+@param gamePath  the game folder (…/dota 2 beta/game)
+```
 
 ## src/item-visuals.ts
 

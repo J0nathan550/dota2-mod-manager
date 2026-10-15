@@ -14,15 +14,25 @@ interface LivePick { itemId?: string; name?: string; effectId?: string }
 
 type PickedIn = (slot: string) => LivePick | null | undefined;
 
-/** The effects of a pick in the order the slot offers them, as one string: 'fire,snow'. */
-export function effectKey(effects: ItemEffect[] | undefined, ids: string[] | undefined): string {
+/** The effects of a pick in the order the slot offers them, as one string: 'fire,snow'; and its
+ *  style last when it is not the item's first, 'fire,snow,style-2' (src/item-builder.ts effectKey). */
+export function effectKey(effects: ItemEffect[] | undefined, ids: string[] | undefined, style = 0): string {
   const want = new Set(ids || []);
-  return (effects || []).map((fx) => fx.id).filter((id) => id && want.has(id)).join(',');
+  const fx = (effects || []).map((e) => e.id).filter((id) => id && want.has(id));
+  return [...fx, ...(style > 0 ? [`style-${style}`] : [])].join(',');
 }
+
+const STYLE = /^style-(\d+)$/;
 
 /** A record's effects as a list (a record keeps them comma separated, src/item-builder.ts effectKey). */
 export function liveEffects(live: LivePick | null | undefined): string[] {
-  return live?.effectId ? String(live.effectId).split(',').filter(Boolean) : [];
+  return live?.effectId ? String(live.effectId).split(',').filter((id) => id && !STYLE.test(id)) : [];
+}
+
+/** A record's style: the number its key carries ('style-2'), 0 for the item's first. */
+export function liveStyle(live: LivePick | null | undefined): number {
+  const token = String(live?.effectId || '').split(',').find((id) => STYLE.test(id));
+  return token ? Number(STYLE.exec(token)![1]) : 0;
 }
 
 /**
@@ -33,16 +43,17 @@ export function liveEffects(live: LivePick | null | undefined): string[] {
 export function stagedItemAction(
   effects: ItemEffect[] | undefined,
   live: LivePick | null | undefined,
-  st: { busy: boolean; selectedId: string; effectIds: string[] },
+  st: { busy: boolean; selectedId: string; effectIds: string[]; style?: number },
 ): BuilderAction {
   if (st.busy) return { label: L`Надеваю…`, icon: 'hourglass_top', off: true };
   if (!st.selectedId) {
     return live ? { label: L`Вернуть стандартный`, icon: 'undo', remove: true } : { label: L`Надето`, icon: 'check', off: true };
   }
   if (live?.itemId !== st.selectedId) return { label: L`Надеть`, icon: 'checkroom' };
-  return effectKey(effects, st.effectIds) === effectKey(effects, liveEffects(live))
+  if (effectKey(effects, st.effectIds) !== effectKey(effects, liveEffects(live))) return { label: L`Сохранить эффекты`, icon: 'auto_awesome' };
+  return (st.style || 0) === liveStyle(live)
     ? { label: L`Надето`, icon: 'check', off: true }
-    : { label: L`Сохранить эффекты`, icon: 'auto_awesome' };
+    : { label: L`Сохранить стиль`, icon: 'palette' };
 }
 
 // The effects that have a picture. A fixed set, the same ids src/item-builder.ts offers, so the

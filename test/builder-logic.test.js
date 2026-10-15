@@ -41,6 +41,19 @@ test('effects are written in the order the slot offers them, and read back as a 
   assert.deepEqual(liveEffects(null), []);
 });
 
+test("a style rides last in the pick, is read back apart from the effects, and changing it is the button's to save", async () => {
+  const { effectKey, liveEffects, liveStyle, stagedItemAction } = await load();
+  assert.equal(effectKey(effects, ['snow', 'fire'], 2), 'fire,snow,style-2');
+  assert.equal(effectKey(effects, [], 0), '', 'the first style is no token, as picks were before styles');
+  const live = { itemId: '42', name: 'Bracers', effectId: 'fire,style-1' };
+  assert.deepEqual(liveEffects(live), ['fire'], 'the style is not an effect');
+  assert.equal(liveStyle(live), 1);
+  assert.equal(liveStyle({ effectId: 'fire' }), 0);
+  assert.equal(stagedItemAction(effects, live, { ...staged('42', ['fire']), style: 1 }).off, true, 'what is on already');
+  assert.equal(stagedItemAction(effects, live, { ...staged('42', ['fire']), style: 2 }).label, 'Сохранить стиль');
+  assert.equal(stagedItemAction(effects, live, { ...staged('42', []), style: 2 }).label, 'Сохранить эффекты', 'both changed: one button saves both');
+});
+
 test('a set is found by its own name or by a piece, and says only what tells something', async () => {
   const { matchingSets, setCardMeta, setCount, setIsOn } = await load();
   const piece = (slot, itemId, name, fits = true) => ({ slot, itemId, name, fits });

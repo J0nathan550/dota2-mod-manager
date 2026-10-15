@@ -791,3 +791,64 @@ ${pudge}
   assert.match(block, /"prefab"\t\t"default_item"\r?\n\}\s*$/);
   assert.match(block, /^"600"/, 'under the stock item\'s id');
 });
+
+/** Earthshaker's stock bracers and an immortal for them with three styles, as items_game writes
+ *  Bracers of the Cavern Luminar: a skin and an unlock per style, a particle per style, a sound
+ *  swap and a response criterion for every style, and a third style with a model of its own. */
+function styledTable() {
+  const es = '\t\t\t"used_by_heroes"\n\t\t\t{\n\t\t\t\t"npc_dota_hero_earthshaker"\t\t"1"\n\t\t\t}\n';
+  const mod = (fields: [string, string][]) => `\t\t\t\t"asset_modifier"\n\t\t\t\t{\n${fields.map(([k, v]) => `\t\t\t\t\t"${k}"\t\t"${v}"\n`).join('')}\t\t\t\t}\n`;
+  const totem = 'particles/units/heroes/hero_earthshaker/earthshaker_totem_buff.vpcf';
+  return table([
+    `\t\t"700"\n\t\t{\n\t\t\t"name"\t\t"Earthshaker's Bracers"\n\t\t\t"prefab"\t\t"default_item"\n\t\t\t"item_slot"\t\t"arms"\n\t\t\t"model_player"\t\t"models/heroes/earthshaker/bracers.vmdl"\n${es}\t\t}\n`,
+    `\t\t"7293"\n\t\t{\n\t\t\t"name"\t\t"Bracers of the Cavern Luminar"\n\t\t\t"prefab"\t\t"wearable"\n\t\t\t"item_slot"\t\t"arms"\n\t\t\t"model_player"\t\t"models/items/earthshaker/ti6_bracer.vmdl"\n${es}`
+      + '\t\t\t"visuals"\n\t\t\t{\n'
+      + '\t\t\t\t"styles"\n\t\t\t\t{\n'
+      + '\t\t\t\t\t"0"\n\t\t\t\t\t{\n\t\t\t\t\t\t"name"\t\t"#Style_Luminar_0"\n\t\t\t\t\t\t"skin"\t\t"0"\n\t\t\t\t\t}\n'
+      + '\t\t\t\t\t"1"\n\t\t\t\t\t{\n\t\t\t\t\t\t"name"\t\t"#Style_Luminar_1"\n\t\t\t\t\t\t"skin"\t\t"1"\n\t\t\t\t\t\t"unlock"\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t"gem"\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t"def_index"\t\t"3023"\n\t\t\t\t\t\t\t}\n\t\t\t\t\t\t}\n\t\t\t\t\t}\n'
+      + '\t\t\t\t\t"2"\n\t\t\t\t\t{\n\t\t\t\t\t\t"name"\t\t"#Style_Luminar_2"\n\t\t\t\t\t\t"model_player"\t\t"models/items/earthshaker/ti6_bracer_gold.vmdl"\n\t\t\t\t\t\t"price"\t\t"100"\n\t\t\t\t\t}\n'
+      + '\t\t\t\t}\n'
+      + mod([['type', 'particle'], ['asset', totem], ['modifier', 'particles/econ/ti6/totem_buff.vpcf'], ['style', '0']])
+      + mod([['type', 'particle'], ['asset', totem], ['modifier', 'particles/econ/ti6/totem_buff_v2.vpcf'], ['style', '1']])
+      + mod([['type', 'sound'], ['asset', 'Hero_EarthShaker.Totem'], ['modifier', 'Hero_EarthShaker.Totem.Immortal']])
+      + mod([['type', 'response_criteria'], ['asset', 'luminar']])
+      + '\t\t\t}\n\t\t}\n',
+  ]);
+}
+
+test("an item's styles are offered with it, by their names' tokens", () => {
+  const option = builder.itemSlots(styledTable()).flatMap((s) => s.options).find((o) => o.id === '7293');
+  assert.deepEqual(option?.styles, ['#Style_Luminar_0', '#Style_Luminar_1', '#Style_Luminar_2']);
+  assert.equal(builder.effectKey('style-2,fire'), 'fire,style-2', 'a style rides last in the pick, after its effects');
+  assert.equal(builder.effectKey('fire,style-0'), 'fire', 'the first style is no token: a pick made before styles is the same pick');
+});
+
+test('a pick in its first style is written as before, with what that style swaps, its sound and its voice', () => {
+  const first = builder.itemEffectPatch(styledTable(), '7293', '');
+  assert.equal(first.id, '700');
+  assert.doesNotMatch(first.block, /"styles"/);
+  assert.deepEqual(first.assetCopies, [
+    { from: 'models/items/earthshaker/ti6_bracer.vmdl', to: 'models/heroes/earthshaker/bracers.vmdl' },
+    { from: 'particles/econ/ti6/totem_buff.vpcf', to: 'particles/units/heroes/hero_earthshaker/earthshaker_totem_buff.vpcf' },
+  ]);
+  // the server switches these for the item's owner only; the build rewrites the events (src/item-sounds.ts)
+  assert.deepEqual(first.sounds, [{ sound: 'Hero_EarthShaker.Totem', as: 'Hero_EarthShaker.Totem.Immortal' }]);
+  assert.deepEqual(first.voices, [{ hero: 'npc_dota_hero_earthshaker', key: 'customresponse', value: 'luminar' }]);
+});
+
+test("a pick in another style is the item with that style as its only one, and that style's files", () => {
+  const second = builder.itemEffectPatch(styledTable(), '7293', 'style-1');
+  const styles = /"styles"\s*\{\s*"0"\s*\{([^}]*)\}\s*\}/.exec(second.block);
+  assert.ok(styles, 'one style, numbered 0, as a stock item can wear');
+  assert.match(styles[1], /"skin"\s+"1"/, "the second style's material");
+  assert.doesNotMatch(second.block, /"unlock"|#Style_Luminar_0|ti6\/totem_buff\.vpcf"/, "no unlock, and the first style's particle is gone");
+  assert.match(second.block, /totem_buff_v2\.vpcf"\s*"style"\s+"0"/, "the second style's particle, now the first style's");
+  assert.deepEqual(second.assetCopies.map((c) => c.from), ['models/items/earthshaker/ti6_bracer.vmdl', 'particles/econ/ti6/totem_buff_v2.vpcf']);
+
+  const third = builder.itemEffectPatch(styledTable(), '7293', 'style-2');
+  assert.match(third.block, /"model_player"\s+"models\/items\/earthshaker\/ti6_bracer_gold\.vmdl"/, "the third style's own model is worn");
+  assert.doesNotMatch(third.block, /"price"/);
+  assert.deepEqual(third.assetCopies[0], { from: 'models/items/earthshaker/ti6_bracer_gold.vmdl', to: 'models/heroes/earthshaker/bracers.vmdl' });
+  assert.deepEqual(builder.itemEffectPatch(styledTable(), '7293', 'style-9').block, builder.itemEffectPatch(styledTable(), '7293', '').block,
+    'a style the item has not got is its first');
+});

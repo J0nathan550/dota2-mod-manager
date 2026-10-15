@@ -13,6 +13,7 @@ import * as schema from './schema.ts';
 import * as itemBuilder from './item-builder.ts';
 import { createHarvest, type SchemaInstaller } from './schema-harvest.ts';
 import { createCosmetics } from './schema-cosmetics.ts';
+import { soundEntries, type SoundSwap, type VoiceCue } from './item-sounds.ts';
 import type { Settings } from './settings.ts';
 import type { Library } from './library.ts';
 
@@ -63,6 +64,8 @@ export function createSchemaService({ settings, library, installer, userDataDir,
   // so toggling, deleting and sharing it in a preset all go through the normal machinery.
   function patches(vanillaText: string, game: string): schema.SchemaPatch[] {
     const out: schema.SchemaPatch[] = [];
+    const sounds: SoundSwap[] = [];
+    const voices: VoiceCue[] = [];
     for (const rec of library.list()) {
       if (rec.enabled === false) continue;
       if (rec.categoryId === 'cosmetic') {
@@ -70,6 +73,8 @@ export function createSchemaService({ settings, library, installer, userDataDir,
           if (rec.slot === 'items' || String(rec.slot || '').startsWith('item:')) {
             const built = itemBuilder.itemEffectPatch(vanillaText, String(rec.itemId), rec.effectId);
             out.push({ id: built.id, block: built.block, assets: itemBuilder.gameAssetEntries(game, built.assetCopies), source: rec.name });
+            sounds.push(...built.sounds);
+            voices.push(...built.voices);
             continue;
           }
           const target = schema.baseItemFor(vanillaText, rec.slot);
@@ -84,6 +89,16 @@ export function createSchemaService({ settings, library, installer, userDataDir,
       }
       if (!Array.isArray(rec.schema)) continue;
       for (const d of rec.schema) out.push({ id: d.id, block: d.block, source: rec.name });
+    }
+    // Two picks for one hero rewrite the same soundevents file, and the build keeps the first file
+    // of a path it is given: so every pick's sounds go into one copy, ahead of all other files.
+    const first = out.find((p) => p.assets);
+    if (first) {
+      try {
+        first.assets = [...soundEntries(game, sounds, voices), ...first.assets!];
+      } catch (err) {
+        log(`schema: the items' sounds left out of the build: ${(err as Error)?.message || err}`);
+      }
     }
     return out;
   }
