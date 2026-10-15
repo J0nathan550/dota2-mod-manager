@@ -7,7 +7,9 @@
 //     never be the stale copy a mod happened to ship;
 //   - a mod's changes live in the library record (record.schema), never in its VPK;
 //   - nothing is written to the game unless the user turned the patch on.
+import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import * as patcher from './patcher.ts';
 import * as schema from './schema.ts';
 import * as itemBuilder from './item-builder.ts';
@@ -21,6 +23,25 @@ import type { Library } from './library.ts';
 
 export type { SchemaInstaller } from './schema-harvest.ts';
 export type { CosmeticSlot } from './schema-cosmetics.ts';
+
+let builderCode: string | null | undefined;
+/**
+ * The app's own code, as a fingerprint of src/: a build the item builder made is only as right as the
+ * code that made it. A fix to how a pick is built never reached the picks already built, which kept
+ * the old files until each was taken off and picked again. Read once per run (~150 small files,
+ * inside app.asar when packaged); null where it cannot be read, which rebuilds nothing.
+ */
+export function builderStamp(dir = import.meta.dirname): string | null {
+  if (builderCode !== undefined && dir === import.meta.dirname) return builderCode;
+  let out: string | null = null;
+  try {
+    const hash = crypto.createHash('sha1');
+    for (const f of fs.readdirSync(dir).filter((x) => x.endsWith('.ts')).sort()) hash.update(f).update(fs.readFileSync(path.join(dir, f)));
+    out = hash.digest('hex').slice(0, 12);
+  } catch { /* not readable: the game's stamp alone decides */ }
+  if (dir === import.meta.dirname) builderCode = out;
+  return out;
+}
 
 /** The patch and the built table as Settings shows them; the patcher's own state is merged in. */
 export interface SchemaState extends Partial<patcher.PatchState> {
@@ -44,6 +65,8 @@ export function createSchemaService({ settings, library, installer, userDataDir,
 }) {
   const backupDir = path.join(userDataDir, 'backups', 'patch');
   const gamePath = () => settings.get('dotaGamePath');
+  // what the deployed table was built from: the game's item table, and the code that built it
+  const stampOf = (table: string | null) => (table ? [table, builderStamp()].filter(Boolean).join('|') : null);
 
   // The game's table is 50 MB and walking its 25k items costs ~300 ms, while the picker
   // asks about a dozen slots in a row. Hold on to the text until the game itself changes:
@@ -132,7 +155,7 @@ export function createSchemaService({ settings, library, installer, userDataDir,
       const list = patches(base.text, game);
       if (!list.length) return drop();
       const res = schema.deploy({ gamePath: game, folder: patcher.FOLDER, patches: list, base });
-      settings.set('schemaStamp', res.stamp);
+      settings.set('schemaStamp', stampOf(res.stamp));
       return { ok: true, deployed: true, patches: res.applied.length, missing: res.missing, conflicts: res.conflicts, bytes: res.bytes };
     } catch (err) {
       return { ok: false, error: String((err as Error)?.message || err) };
@@ -167,7 +190,8 @@ export function createSchemaService({ settings, library, installer, userDataDir,
         patcher.apply({ gamePath: game, folder: patcher.FOLDER, backupDir });
         healed.push('patch');
       }
-      const stamp = schema.readGameSchema(game).stamp;
+      // a new build of the game or of the app: either can change what a pick builds into
+      const stamp = stampOf(schema.readGameSchema(game).stamp);
       if (stamp !== settings.get('schemaStamp') || !schema.isDeployed(game, patcher.FOLDER)) {
         refresh();
         healed.push('schema');
@@ -235,7 +259,7 @@ export function createSchemaService({ settings, library, installer, userDataDir,
     try {
       Object.assign(out, patcher.state(game, patcher.FOLDER));
       out.deployed = schema.isDeployed(game, patcher.FOLDER);
-      if (out.deployed) out.stale = schema.readGameSchema(game).stamp !== settings.get('schemaStamp');
+      if (out.deployed) out.stale = stampOf(schema.readGameSchema(game).stamp) !== settings.get('schemaStamp');
     } catch (err) {
       out.error = String((err as Error)?.message || err);
     }

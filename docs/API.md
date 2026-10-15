@@ -6226,6 +6226,17 @@ Hands on from [`src/schema-harvest.ts`](#srcschema-harvestts): `SchemaInstaller`
 
 Hands on from [`src/schema-cosmetics.ts`](#srcschema-cosmeticsts): `CosmeticSlot`.
 
+### `builderStamp`
+
+```ts
+export function builderStamp(dir = import.meta.dirname): string | null
+```
+
+The app's own code, as a fingerprint of src/: a build the item builder made is only as right as the
+code that made it. A fix to how a pick is built never reached the picks already built, which kept
+the old files until each was taken off and picked again. Read once per run (~150 small files,
+inside app.asar when packaged); null where it cannot be read, which rebuilds nothing.
+
 ### `SchemaState`
 
 ```ts

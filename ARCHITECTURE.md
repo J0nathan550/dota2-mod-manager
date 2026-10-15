@@ -333,6 +333,12 @@ the background and most people press Play in Steam, and the repair runs by itsel
 also rebuilt when it was copied from an older `gameinfo.gi` than the game has: build 6946 renamed
 the language path key, and a patch from the day before stopped mounting the language folder.
 
+The built table is rebuilt the same way when the app's own code changed, at the next start or press
+of Play. Picks are kept as records and built from the game's files, so their models, sounds and
+pictures are only as right as the code that built them: the stamp in settings names both the game's
+item table and a fingerprint of `src/` (`builderStamp`). Before it, a fix to the item builder never
+reached a pick until the pick was taken off and made again.
+
 After the repair, `src/update-impact.ts` compares Valve's files that installed mods replace with
 what the update shipped. A mod whose copies the patch changed or removed is marked "pre-patch" in
 My mods and named in the banner about the update: it now puts old files back over new ones.

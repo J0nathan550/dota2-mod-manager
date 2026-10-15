@@ -18,7 +18,7 @@ import * as schema from '../src/schema.ts';
 import { entryAt, readVpkEntryFile } from '../src/vpk.ts';
 import { encodeKv3, resource } from './helpers/kv3-build.ts';
 import { Library } from '../src/library.ts';
-import { createSchemaService, type SchemaInstaller } from '../src/schema-service.ts';
+import { builderStamp, createSchemaService, type SchemaInstaller } from '../src/schema-service.ts';
 import type { Settings } from '../src/settings.ts';
 import type { LibFile, LibRecord } from '../src/types.ts';
 
@@ -195,6 +195,33 @@ test('a game update is noticed, and repaired: the patch put back and the table r
   assert.match(built, /models\/mod\/rifle\.vmdl/, 'and the mod still in it');
 
   assert.deepEqual(s.svc.heal(), { ok: true, healed: [] }, 'a second look finds nothing to do');
+});
+
+test('a table built by older code is rebuilt at the next start or launch, the game unchanged', (t) => {
+  // the picks kept the files the old item builder made, until each was taken off and picked again
+  const s = service(t);
+  modWith(s.library, 'Rifle mod', [riflePatch('models/mod/rifle.vmdl')]);
+  s.svc.setEnabled(true);
+  assert.deepEqual(s.svc.heal(), { ok: true, healed: [] });
+  const built = String(s.settings.get('schemaStamp'));
+  assert.ok(built.endsWith(`|${builderStamp()}`), 'the stamp names the code as well as the game');
+  s.settings.set('schemaStamp', built.replace(/\|[^|]+$/, '|older'));
+  assert.equal(s.svc.state().stale, true);
+  assert.deepEqual(s.svc.heal(), { ok: true, healed: ['schema'] });
+  assert.equal(s.settings.get('schemaStamp'), built);
+});
+
+test("the code's fingerprint follows its files", (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'd2mm-code-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(dir, 'a.ts'), 'one');
+  fs.writeFileSync(path.join(dir, 'notes.md'), 'not code');
+  const before = builderStamp(dir);
+  fs.writeFileSync(path.join(dir, 'notes.md'), 'still not code');
+  assert.equal(builderStamp(dir), before);
+  fs.writeFileSync(path.join(dir, 'a.ts'), 'two');
+  assert.notEqual(builderStamp(dir), before);
+  assert.equal(builderStamp(path.join(dir, 'missing')), null, 'unreadable: nothing to compare, nothing rebuilt for it');
 });
 
 test('a signed patch built from an older gameinfo.gi is rebuilt from the new one', (t) => {
