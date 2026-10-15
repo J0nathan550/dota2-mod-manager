@@ -13,6 +13,13 @@ import * as vpk from '../src/vpk.ts';
 import { Library } from '../src/library.ts';
 import { createSchemaService, type SchemaInstaller } from '../src/schema-service.ts';
 import type { Settings } from '../src/settings.ts';
+import { readKv3, type Kv3Node } from '../src/kv3.ts';
+import { resourceBlock } from '../src/resource.ts';
+import { at, model } from './helpers/kv3-build.ts';
+
+/** A model's animation clips, with what each plays (as test/arcana.test.ts reads them). */
+const clips = (file: Buffer) => (at(readKv3(resourceBlock(file, 'ANIM').data).root, 'm_animArray') as Extract<Kv3Node, { kind: 'array' }>).items
+  .map((x) => [(at(x, 'm_name') as { value: string }).value, (at(x, 'm_activityArray') as Extract<Kv3Node, { kind: 'array' }>).items.map((a) => (at(a, 'm_name') as { value: string }).value)]);
 
 /** Settings kept in `values`; `onSet` sees every write. */
 function settingsIn(values: Record<string, unknown>, onSet: (key: string) => void = () => {}) {
@@ -371,21 +378,26 @@ function itemWearableTable() {
   ]);
 }
 
-test('item cosmetics build one slot per hero part, infer missing stock slots, and hide arcana/persona', () => {
+test('item cosmetics build one slot per hero part, infer missing stock slots, offer arcanas and hide personas', () => {
   const text = itemWearableTable();
   const slots = builder.itemSlots(text);
   assert.deepEqual(slots.map((s) => [s.slot, s.equipSlot, s.slotLabel, s.options.map((o) => o.id)]), [
+    // a stock item with "Arcana" in its name used to take its slot out of the builder
+    ['item:axe:back', 'back', 'Back', ['9903', '9456']],
     ['item:bloodseeker:weapon', 'weapon', 'Weapon', ['9600']],
     ['item:bloodseeker:offhand_weapon', 'offhand_weapon', 'Offhand weapon', ['9601']],
     ['item:sniper:head', 'head', 'Head', ['9457']],
     ['item:sniper:back', 'back', 'Back', ['9455']],
     ['item:tidehunter:weapon', 'weapon', 'Weapon', ['9801']],
   ]);
-  assert.equal(slots[0].label.includes('Bloodseeker'), true);
-  assert.equal(slots[0].label.includes('Weapon'), true);
+  const blade = slots.find((s) => s.slot === 'item:bloodseeker:weapon');
+  assert.equal(blade?.label.includes('Bloodseeker'), true);
+  assert.equal(blade?.label.includes('Weapon'), true);
   assert.equal(slots.some((s) => s.slot.includes('wisp')), false);
-  assert.equal(slots.some((s) => /arcana|persona/i.test(`${s.slot} ${s.label}`)), false);
+  assert.equal(slots.some((s) => /persona/i.test(`${s.slot} ${s.label}`)), false);
   assert.deepEqual(builder.itemOptions(text), [
+    { id: '9903', name: 'Axe Arcana Cape' },
+    { id: '9456', name: 'Unsupported back' },
     { id: '9600', name: 'Bloodseeker main blade' },
     { id: '9601', name: 'Bloodseeker offhand blade' },
     { id: '9457', name: 'No visuals here' },
@@ -422,7 +434,7 @@ test('a wearable resolves to the matching default item by hero and slot', () => 
   assert.equal(inferred.name, "Tidehunter's Anchor");
 
   assert.equal(builder.defaultItemForWearable(text, '9901'), null, 'persona items stay hidden');
-  assert.equal(builder.defaultItemForWearable(text, '9903'), null, 'arcana items stay hidden');
+  assert.equal(builder.defaultItemForWearable(text, '9903')?.id, '9902', 'an arcana dresses its stock item like any wearable');
 });
 
 test('item effects keep the donor body, rewrite only the stock header and collect asset copies', () => {
@@ -579,10 +591,12 @@ ${extra}\t\t\t"used_by_heroes"
     block('9954', 'Sniper Third Cape', 'wearable', 'sniper', '\t\t\t"item_slot"\t\t"back"\n'),
     // no item_slot, and a name that reads like a helmet: the game puts it in the hand
     block('9953', 'Bloodseeker Headmaster Wand', 'wearable', 'bloodseeker'),
+    // Axe has no stock belt, so the builder has nowhere to put it
+    block('9955', 'Axe Belt', 'wearable', 'axe', '\t\t\t"item_slot"\t\t"belt"\n'),
     bundle('9960', 'Sniper Set', 'sniper',
       ['Golden Full-Bore Bonanza', 'No visuals here', 'Sniper Persona Gun', 'Sniper Loading Screen', 'Sniper Spare Cape']),
     bundle('9961', 'Bloodseeker Set', 'bloodseeker', ['Bloodseeker Headmaster Wand']),
-    bundle('9962', 'Axe Set', 'axe', ['Unsupported back']),
+    bundle('9962', 'Axe Set', 'axe', ['Axe Belt']),
     // a store bundle of several sets: more pieces want a taken slot than fit
     bundle('9963', 'Sniper Big Bundle', 'sniper', ['Golden Full-Bore Bonanza', 'Sniper Spare Cape', 'Sniper Third Cape']),
     bundle('9964', 'Sniper Set DO NOT USE', 'sniper', ['Golden Full-Bore Bonanza']),
@@ -611,7 +625,7 @@ test('a set lists the hero items the builder puts on, and says why it leaves one
   assert.deepEqual(sniper.pieces.map((p) => [p.name, p.fits, p.fits ? p.slot : p.reason]), [
     ['Golden Full-Bore Bonanza', true, 'item:sniper:back'],
     ['No visuals here', true, 'item:sniper:head'],
-    ['Sniper Persona Gun', false, 'an arcana or persona: the builder leaves those alone'],
+    ['Sniper Persona Gun', false, 'a persona: the builder leaves those alone'],
     ['Sniper Spare Cape', false, 'a second item for the same slot'],
   ]);
   assert.equal(builder.itemSlots(itemSetTable()).some((s) => s.equipSlot === 'bundle'), false, 'a set is not a slot');
@@ -643,51 +657,95 @@ test('a whole set goes on in one write, a row per piece, and a piece already on 
   assert.throws(() => service.pickSet('404'), /Set not found/);
 });
 
-test('an arcana in an ordinary slot is neither offered nor dressed as the stock item', () => {
-  /* The arcanas and personas in the table above sit in persona slots, which have no stock item to
-     match, so they were left out before the arcana rule was ever asked. An arcana can also sit in
-     a plain weapon slot beside a stock weapon; only the rule keeps it out of the picker. */
-  const text = table([
-    `\t\t"500"
-\t\t{
-\t\t\t"name"\t\t"Bloodseeker weapon default"
-\t\t\t"prefab"\t\t"default_item"
-\t\t\t"item_slot"\t\t"weapon"
-\t\t\t"used_by_heroes"
-\t\t\t{
-\t\t\t\t"npc_dota_hero_bloodseeker"\t\t"1"
-\t\t\t}
-\t\t}`,
-    `\t\t"9600"
-\t\t{
-\t\t\t"name"\t\t"Bloodseeker main blade"
-\t\t\t"prefab"\t\t"wearable"
-\t\t\t"item_slot"\t\t"weapon"
-\t\t\t"used_by_heroes"
-\t\t\t{
-\t\t\t\t"npc_dota_hero_bloodseeker"\t\t"1"
-\t\t\t}
-\t\t\t"visuals"
-\t\t\t{
-\t\t\t}
-\t\t}`,
-    `\t\t"9650"
-\t\t{
-\t\t\t"name"\t\t"Bloodseeker Arcana Blade"
-\t\t\t"prefab"\t\t"wearable"
-\t\t\t"item_slot"\t\t"weapon"
-\t\t\t"used_by_heroes"
-\t\t\t{
-\t\t\t\t"npc_dota_hero_bloodseeker"\t\t"1"
-\t\t\t}
-\t\t\t"visuals"
-\t\t\t{
-\t\t\t}
-\t\t}`,
+/** A hero's stock base and its arcana, as items_game has Juggernaut's: a whole other hero model,
+ *  an activity modifier, two styles, and a swap for another unit's model that is not the hero's. */
+function arcanaTable() {
+  const jugg = `\t\t\t"used_by_heroes"\n\t\t\t{\n\t\t\t\t"npc_dota_hero_juggernaut"\t\t"1"\n\t\t\t}\n`;
+  const mod = (type: string, asset: string, modifier: string, style = '', key = 'asset_modifier') => `\t\t\t\t"${key}"\n\t\t\t\t{\n\t\t\t\t\t"type"\t\t"${type}"\n\t\t\t\t\t"asset"\t\t"${asset}"\n\t\t\t\t\t"modifier"\t\t"${modifier}"\n${style ? `\t\t\t\t\t"style"\t\t"${style}"\n` : ''}\t\t\t\t}\n`;
+  return table([
+    `\t\t"811"\n\t\t{\n\t\t\t"name"\t\t"Juggernaut's Base"\n\t\t\t"prefab"\t\t"default_item"\n\t\t\t"item_slot"\t\t"hero_base"\n${jugg}\t\t}\n`,
+    `\t\t"812"\n\t\t{\n\t\t\t"name"\t\t"Juggernaut's Mask"\n\t\t\t"prefab"\t\t"default_item"\n\t\t\t"item_slot"\t\t"head"\n\t\t\t"model_player"\t\t"models/heroes/juggernaut/jugg_mask.vmdl"\n${jugg}\t\t}\n`,
+    `\t\t"9059"\n\t\t{\n\t\t\t"name"\t\t"Bladeform Legacy"\n\t\t\t"prefab"\t\t"wearable"\n\t\t\t"item_rarity"\t\t"arcana"\n\t\t\t"item_slot"\t\t"hero_base"\n${jugg}`
+      + `\t\t\t"visuals"\n\t\t\t{\n`
+      + mod('entity_model', 'npc_dota_hero_juggernaut', 'models/heroes/juggernaut/juggernaut_arcana.vmdl', '0')
+      + mod('entity_model', 'npc_dota_hero_juggernaut', 'models/heroes/juggernaut/juggernaut_arcana.vmdl', '1')
+      + mod('activity', 'ALL', 'arcana')
+      + mod('activity', 'ALL', 'red', '1')
+      + mod('particle', 'particles/units/heroes/hero_juggernaut/juggernaut_blade_fury.vpcf', 'particles/econ/items/juggernaut/jugg_arcana/blade_fury.vpcf', '0')
+      + mod('particle', 'particles/units/heroes/hero_juggernaut/juggernaut_blade_fury.vpcf', 'particles/econ/items/juggernaut/jugg_arcana/blade_fury_red.vpcf', '1')
+      // numbered, as Zeus's and Phantom Assassin's arcanas write theirs
+      + mod('model', 'models/heroes/juggernaut/jugg_mask.vmdl', 'models/development/invisiblebox.vmdl', '', 'asset_modifier0')
+      + mod('model', 'models/items/juggernaut/paid_mask/paid_mask.vmdl', 'models/items/juggernaut/paid_mask/paid_mask_arcana_refit.vmdl')
+      + mod('entity_model', 'npc_dota_lone_druid_bear1', 'models/heroes/lone_druid/spirit_bear_rubick.vmdl')
+      + `\t\t\t\t"styles"\n\t\t\t\t{\n\t\t\t\t}\n\t\t\t}\n\t\t}\n`,
+    // a persona in an ordinary slot: only the rule keeps it out, a persona slot has no stock item anyway
+    `\t\t"9070"\n\t\t{\n\t\t\t"name"\t\t"Juggernaut Persona Base"\n\t\t\t"prefab"\t\t"wearable"\n\t\t\t"item_slot"\t\t"hero_base"\n${jugg}\t\t}\n`,
   ]);
-  assert.deepEqual(builder.itemOptions(text).map((o) => o.id), ['9600'], 'the plain blade is offered, the arcana is not');
-  assert.equal(builder.defaultItemForWearable(text, '9600')?.id, '500');
-  assert.equal(builder.defaultItemForWearable(text, '9650'), null, 'the arcana does not dress the stock weapon');
+}
+
+test('an arcana is offered and dresses the stock item of its slot, the hero base most of them sit in', () => {
+  /* Arcanas used to be left out by their name, and hero_base with them: twelve heroes have a stock
+     "<Hero>'s Base" for an arcana to dress, and none of it was offered. */
+  const text = arcanaTable();
+  const slot = builder.itemSlots(text).find((s) => s.equipSlot === 'hero_base');
+  assert.equal(slot?.slot, 'item:juggernaut:hero_base');
+  assert.equal(slot?.slotLabel, 'Hero base');
+  assert.deepEqual(slot?.options, [{ id: '9059', name: 'Bladeform Legacy' }], 'the arcana, and not the persona beside it');
+  assert.equal(builder.defaultItemForWearable(text, '9059')?.id, '811');
+  assert.equal(builder.defaultItemForWearable(text, '9070'), null, 'a persona does not dress the stock base');
+});
+
+test("an arcana's patch brings its hero model under the plain hero's, with its first style's swaps", () => {
+  const patched = builder.itemEffectPatch(arcanaTable(), '9059', '');
+  assert.equal(patched.id, '811');
+  assert.match(patched.block, /"type"\s+"entity_model"/, 'the table still swaps the model where the game reads it');
+  assert.deepEqual(patched.assetCopies, [
+    // the hero's own, once, with what the item switches on in every style: "red" is the second style's
+    { from: 'models/heroes/juggernaut/juggernaut_arcana.vmdl', hero: 'npc_dota_hero_juggernaut', activities: ['arcana'] },
+    // the stock mask hidden, as the arcana's body has its own; a paid mask's refit is not the hero's to change
+    { from: 'models/development/invisiblebox.vmdl', to: 'models/heroes/juggernaut/jugg_mask.vmdl' },
+    // the second style's version of the same particle would have won
+    { from: 'particles/econ/items/juggernaut/jugg_arcana/blade_fury.vpcf', to: 'particles/units/heroes/hero_juggernaut/juggernaut_blade_fury.vpcf' },
+  ], "and the spirit bear's swap left alone: it is not Juggernaut's");
+});
+
+test("an arcana's hero model goes in under the path the hero's script names, playing without the item's modifier", (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'd2mm-arcana-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(dir, 'dota'), { recursive: true });
+  const arcana = model('models/heroes/juggernaut/juggernaut_arcana.vmdl', [
+    ['attack', ['ACT_DOTA_ATTACK', 'arcana']],
+    ['attack_plain', ['ACT_DOTA_ATTACK']],
+  ]);
+  // the ward's Model comes after the hero's
+  const script = '"DOTAHeroes"\n{\n\t"npc_dota_hero_juggernaut"\n\t{\n\t\t"Model"\t\t"models/heroes/juggernaut/juggernaut.vmdl"\n\t\t"Ward"\n\t\t{\n\t\t\t"Model"\t\t"models/heroes/juggernaut/jugg_healing_ward.vmdl"\n\t\t}\n\t}\n}\n';
+  fs.writeFileSync(path.join(dir, 'dota', 'pak01_dir.vpk'), vpk.buildVpk([
+    entry('scripts/npc/heroes/npc_dota_hero_juggernaut.txt', script),
+    entry('models/heroes/juggernaut/juggernaut_arcana.vmdl_c', arcana),
+  ]));
+  const entries = builder.gameAssetEntries(dir, [
+    { from: 'models/heroes/juggernaut/juggernaut_arcana.vmdl', hero: 'npc_dota_hero_juggernaut', activities: ['arcana'] },
+    { from: 'models/heroes/juggernaut/juggernaut_arcana.vmdl', hero: 'npc_dota_hero_juggernaut', activities: ['arcana'] },
+  ]);
+  assert.deepEqual(entries.map((en) => vpk.entryPath(en)), ['models/heroes/juggernaut/juggernaut.vmdl_c'], 'once, at the hero path');
+  assert.deepEqual(clips(entries[0].data), [['attack', ['ACT_DOTA_ATTACK']], ['attack_plain', []]],
+    'the arcana attack is the one played with no item to switch it on');
+  assert.throws(() => builder.gameAssetEntries(dir, [{ from: 'models/heroes/juggernaut/juggernaut_arcana.vmdl', hero: 'npc_dota_hero_nobody', activities: [] }]),
+    /model of hero npc_dota_hero_nobody/);
+});
+
+test('a hero model the reader cannot open goes in as it is rather than taking the arcana out of the build', (t) => {
+  // Phantom Assassin's arcana model is KV3 compressed with zstd before version 5, which the reader refuses
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'd2mm-arcana-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(dir, 'dota'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'dota', 'pak01_dir.vpk'), vpk.buildVpk([
+    entry('scripts/npc/heroes/npc_dota_hero_phantom_assassin.txt', '"npc_dota_hero_phantom_assassin"\n{\n\t"Model"\t\t"models/heroes/phantom_assassin/phantom_assassin.vmdl"\n}\n'),
+    entry('models/heroes/phantom_assassin/pa_arcana.vmdl_c', 'bytes the reader cannot open'),
+  ]));
+  const [only] = builder.gameAssetEntries(dir, [{ from: 'models/heroes/phantom_assassin/pa_arcana.vmdl', hero: 'npc_dota_hero_phantom_assassin', activities: ['arcana'] }]);
+  assert.equal(vpk.entryPath(only), 'models/heroes/phantom_assassin/phantom_assassin.vmdl_c');
+  assert.equal(only.data.toString('latin1'), 'bytes the reader cannot open');
 });
 
 test('a wearable finds its stock item under the other spelling of its slot', () => {

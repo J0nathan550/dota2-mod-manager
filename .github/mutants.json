@@ -931,18 +931,18 @@
       "test": "test/workflows.test.js"
     },
     {
-      "name": "an arcana or persona is offered to dress a stock item",
+      "name": "a persona is offered to dress a stock item",
       "file": "src/item-builder-slots.ts",
       "anchor": "export function itemSlots(text: string): ItemSlot[] {",
-      "from": "!item.name || isArcanaPersonaItem(item)) continue;",
+      "from": "!item.name || isPersonaItem(item)) continue;",
       "to": "!item.name) continue;",
       "test": "test/item-builder.test.ts"
     },
     {
-      "name": "a stock item can be dressed as an arcana",
+      "name": "a stock item can be dressed as a persona",
       "file": "src/item-builder.ts",
       "anchor": "export function defaultItemForWearable(",
-      "from": "if (sourceLite && isArcanaPersonaItem(sourceLite)) return null;",
+      "from": "if (sourceLite && isPersonaItem(sourceLite)) return null;",
       "to": "void sourceLite;",
       "test": "test/item-builder.test.ts"
     },

@@ -2861,10 +2861,12 @@ A set, as the builder puts it on; see itemSets.
 ### `AssetCopy`
 
 ```ts
-export type AssetCopy = { from: string; to: string }
+export type AssetCopy = { from: string; to: string } | { from: string; hero: string; activities: string[] }
 ```
 
-A file in the game's archive staged under another path in the built VPK.
+A file in the game's archive staged under another path in the built VPK. A hero's own model
+names the hero instead of a path: where its model lives is in the hero's script, which the
+table does not say, and it goes in with the item's activity modifiers taken off (arcana.ts asModel).
 
 ### `canonicalItemSlot`
 
@@ -2882,13 +2884,19 @@ export function matchItemSlot(slot: unknown): string
 
 A slot name with its aliases folded together (offhand_weapon is offhand, shoulder is shoulders).
 
-### `isArcanaPersonaItem`
+### `isPersonaItem`
 
 ```ts
-export function isArcanaPersonaItem(item: Partial<SchemaItem> | null): boolean
+export function isPersonaItem(item: Partial<SchemaItem> | null): boolean
 ```
 
-An arcana, a persona or a hero's base model, by its name or its slot: the builder leaves these alone.
+A persona, by its name or its slot: the builder leaves these alone. A persona is a second hero
+with slots of its own, and no stock item stands in for one.
+
+Arcanas used to be left alone as well, and so did the hero_base slot most of them sit in. They
+are items like any other: each hero with a hero_base arcana has a stock "<Hero>'s Base" to
+dress (twelve on the game of 2026-10-15), and what an arcana needs beyond its block is its hero
+model under the plain one's path, which item-builder.ts itemEffectPatch now lists.
 
 ### `itemSlots`
 
@@ -2913,7 +2921,7 @@ build and the other 211 put a model-less block over whichever stock item came fi
 
 Only hero items are listed. A set's loading screen, cursor, HUD, ward, announcer or taunt
 has a tab of its own or is not the app's to set, and nobody puts one on with a set. A hero
-item the builder leaves alone (an arcana, a persona) is listed as not fitting, with why: it
+item the builder leaves alone (a persona) is listed as not fitting, with why: it
 is part of what the set looks like. A set with nothing to put on is left out, and so is a store
 bundle of several sets ("Bounty Hunter's Big Bundle": 22 items, 7 slots): more of its pieces
 want a taken slot than fit, and the first of each would dress the hero in a mix of sets that
@@ -2948,7 +2956,8 @@ For each hero and slot the free cosmetics offer that hero's wearables. Picking o
 block in items_game under the stock item's id, name and prefab=default_item, drops the styles
 and unlocks a free base item cannot use, adds the chosen particle effect to its visuals, and
 lists the model and particles to copy out of the game's pak01 under the stock paths, so the
-game draws the wearable where the stock item was. src/schema-service.ts applies it along with
+game draws the wearable where the stock item was. An arcana that swaps the whole hero brings its
+hero model too, under the plain hero's. src/schema-service.ts applies it along with
 the rest of the free cosmetics; src/schema.ts reads and merges the table.
 
 What the builder offers (slots, sets, effects) is src/item-builder-slots.ts, re-exported here;
