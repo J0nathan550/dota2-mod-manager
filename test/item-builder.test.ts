@@ -480,6 +480,12 @@ test('item effects keep the donor body, rewrite only the stock header and collec
       from: 'particles/econ/items/sniper/sniper_immortal_cape_golden/sniper_immortal_cape_golden_headshot_slow_caster.vpcf',
       to: 'particles/units/heroes/hero_sniper/sniper_headshot_slow_caster.vpcf',
     },
+    // the immortal's Headshot icon over the plain one, as an arcana's ability icons go
+    {
+      from: 'panorama/images/spellicons/sniper_headshot_immortal_gold_png.vtex_c',
+      to: 'panorama/images/spellicons/sniper_headshot_png.vtex_c',
+      optional: true,
+    },
   ]);
 
   const out = schema.mergeSchema(text, [{ id: patched.id, block: patched.block, source: 'items' }]);
@@ -504,6 +510,8 @@ test('game asset entries read donor bytes from pak01 and buildSchemaVpk packs th
     { from: 'models/items/sniper/sniper_cape_immortal/sniper_cape_immortal.vmdl', to: 'models/heroes/sniper/cape.vmdl' },
     { from: 'particles/econ/items/sniper/sniper_immortal_cape_golden/sniper_immortal_cape_golden_headshot_slow.vpcf', to: 'particles/units/heroes/hero_sniper/sniper_headshot_slow.vpcf' },
     { from: 'particles/econ/items/sniper/sniper_immortal_cape_golden/sniper_immortal_cape_golden_headshot_slow_caster.vpcf', to: 'particles/units/heroes/hero_sniper/sniper_headshot_slow_caster.vpcf' },
+    // a picture the game has not got in that folder: left out, the pick still builds
+    { from: 'panorama/images/spellicons/sniper_headshot_immortal_gold_png.vtex_c', to: 'panorama/images/spellicons/sniper_headshot_png.vtex_c', optional: true },
   ]);
   assert.deepEqual(extras.map((en) => vpk.entryPath(en)), [
     'models/heroes/sniper/cape.vmdl_c',
@@ -677,6 +685,11 @@ function arcanaTable() {
       + mod('model', 'models/heroes/juggernaut/jugg_mask.vmdl', 'models/development/invisiblebox.vmdl', '', 'asset_modifier0')
       + mod('model', 'models/items/juggernaut/paid_mask/paid_mask.vmdl', 'models/items/juggernaut/paid_mask/paid_mask_arcana_refit.vmdl')
       + mod('entity_model', 'npc_dota_lone_druid_bear1', 'models/heroes/lone_druid/spirit_bear_rubick.vmdl')
+      + mod('icon_replacement_hero', 'npc_dota_hero_juggernaut', 'npc_dota_hero_juggernaut_alt1', '0')
+      + mod('icon_replacement_hero', 'npc_dota_hero_juggernaut', 'npc_dota_hero_juggernaut_alt2', '1')
+      + mod('icon_replacement_hero_minimap', 'npc_dota_hero_juggernaut', 'npc_dota_hero_juggernaut_alt1')
+      + mod('ability_icon', 'juggernaut_blade_fury', 'juggernaut_blade_fury_arcana')
+      + mod('inventory_icon', 'blink', 'blink_jugg_arcana')
       + `\t\t\t\t"styles"\n\t\t\t\t{\n\t\t\t\t}\n\t\t\t}\n\t\t}\n`,
     // a persona in an ordinary slot: only the rule keeps it out, a persona slot has no stock item anyway
     `\t\t"9070"\n\t\t{\n\t\t\t"name"\t\t"Juggernaut Persona Base"\n\t\t\t"prefab"\t\t"wearable"\n\t\t\t"item_slot"\t\t"hero_base"\n${jugg}\t\t}\n`,
@@ -695,8 +708,10 @@ test('an arcana is offered and dresses the stock item of its slot, the hero base
   assert.equal(builder.defaultItemForWearable(text, '9070'), null, 'a persona does not dress the stock base');
 });
 
-test("an arcana's patch brings its hero model under the plain hero's, with its first style's swaps", () => {
+test("an arcana's patch brings its hero model under the plain hero's, with its first style's swaps, pictures and portrait", () => {
   const patched = builder.itemEffectPatch(arcanaTable(), '9059', '');
+  const picture = (folder: string, name: string) => `panorama/images/${folder}/${name}_png.vtex_c`;
+  const pictureCopy = (folder: string, from: string, to: string) => ({ from: picture(folder, from), to: picture(folder, to), optional: true });
   assert.equal(patched.id, '811');
   assert.match(patched.block, /"type"\s+"entity_model"/, 'the table still swaps the model where the game reads it');
   assert.deepEqual(patched.assetCopies, [
@@ -706,7 +721,17 @@ test("an arcana's patch brings its hero model under the plain hero's, with its f
     { from: 'models/development/invisiblebox.vmdl', to: 'models/heroes/juggernaut/jugg_mask.vmdl' },
     // the second style's version of the same particle would have won
     { from: 'particles/econ/items/juggernaut/jugg_arcana/blade_fury.vpcf', to: 'particles/units/heroes/hero_juggernaut/juggernaut_blade_fury.vpcf' },
+    // the portrait of the top bar and of the hero picker, the minimap icon, an ability's; not the
+    // Blink Dagger's picture, which is every hero's
+    pictureCopy('heroes', 'npc_dota_hero_juggernaut_alt1', 'npc_dota_hero_juggernaut'),
+    pictureCopy('heroes/selection', 'npc_dota_hero_juggernaut_alt1', 'npc_dota_hero_juggernaut'),
+    pictureCopy('heroes/icons', 'npc_dota_hero_juggernaut_alt1', 'npc_dota_hero_juggernaut'),
+    pictureCopy('spellicons', 'juggernaut_blade_fury_arcana', 'juggernaut_blade_fury'),
   ], "and the spirit bear's swap left alone: it is not Juggernaut's");
+  assert.deepEqual(patched.portraits, [{ model: 'models/heroes/juggernaut/juggernaut_arcana.vmdl', hero: 'npc_dota_hero_juggernaut' }],
+    "the HUD portrait's camera and lights come with the hero model");
+  assert.deepEqual(patched.sprites, [{ sprite: 'minimap_heroicon_npc_dota_hero_juggernaut', as: 'minimap_heroicon_npc_dota_hero_juggernaut_alt1' }],
+    'the minimap draws hero icons out of its sprite sheet too');
 });
 
 test("an arcana's hero model goes in under the path the hero's script names, playing without the item's modifier", (t) => {

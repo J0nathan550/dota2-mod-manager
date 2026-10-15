@@ -69,6 +69,7 @@ the code, not in this page.
 | [`src/item-builder-slots.ts`](#srcitem-builder-slotsts) | The item builder's offer: for each hero, the slots it can dress, the paid wearables that fit |
 | [`src/item-builder-styles.ts`](#srcitem-builder-stylests) | An item's styles in the item builder: which ones it has, and its visuals with one of them made |
 | [`src/item-builder.ts`](#srcitem-builderts) | The item builder: a hero's stock item built from one of its wearables, with an effect on top. |
+| [`src/item-portraits.ts`](#srcitem-portraitsts) | A hero's HUD portrait and minimap icon as an item builder pick makes them, written once for the |
 | [`src/item-sounds.ts`](#srcitem-soundsts) | An item's sounds and voice, as a mod gives them to a hero who does not own the item. |
 | [`src/item-visuals.ts`](#srcitem-visualsts) | What an item does to the game, read from its block in items_game ("visuals"), and what a mod |
 | [`src/kv3-blobs.ts`](#srckv3-blobsts) | Binary blobs in a KV3 block (src/kv3.ts): where they lie, how they are read, and how they are |
@@ -2813,10 +2814,26 @@ the plain paths (models, particles, the hero's own model), and the sounds and vo
 hero's own (src/item-sounds.ts writes those). src/item-builder.ts makes the block and asks this
 for the rest; the build reads the files out of pak01 here, in gameAssetEntries.
 
+### `SpriteSwap`
+
+```ts
+export interface SpriteSwap { sprite: string; as: string }
+```
+
+A sprite of the game's sprite sheets shown in place of another (the minimap's hero icons are).
+
+### `PortraitSwap`
+
+```ts
+export interface PortraitSwap { model: string; hero: string }
+```
+
+A hero model whose HUD portrait settings go under the hero's own model's path.
+
 ### `ItemAssets`
 
 ```ts
-export interface ItemAssets { assetCopies: AssetCopy[]; sounds: SoundSwap[]; voices: VoiceCue[] }
+export interface ItemAssets { assetCopies: AssetCopy[]; sounds: SoundSwap[]; voices: VoiceCue[]; portraits: PortraitSwap[]; sprites: SpriteSwap[] }
 ```
 
 What a pick asks of the game's files, beside its block.
@@ -2843,6 +2860,10 @@ Only the first style's: the patch leaves the item in its first style, which is t
 written as the first (src/item-builder-styles.ts). Bladeform Legacy swaps every one of its
 particles twice, once per style, and the second would have won.
 
+The pictures it swaps for the hero's (PICTURES): its portrait, minimap icon and ability icons;
+the minimap draws its hero icons out of a sprite sheet as well, so that sprite is swapped too.
+An arcana's hero model brings its HUD portrait's camera and lights (src/item-portraits.ts).
+
 Only what the hero has on without the item. An entity_model for another unit is left alone:
 Rubick's arcana reshapes Spirit Bear and a dozen other heroes' summons for when he steals them.
 So is a model swap for anything but a stock item of the hero's: Queen of Pain's arcana lists 40,
@@ -2856,6 +2877,16 @@ arcanas), and those were read as no entries at all.
 @param text  items_game, for the hero's stock models
 @param heroes  the item's heroes, npc_dota_hero_*
 ```
+
+### `heroModelPath`
+
+```ts
+export function heroModelPath(ix: ReturnType<typeof openVpkIndex>, hero: string): string
+```
+
+Where a hero's own model lives: the first "Model" in its script, which is the hero's (the ones
+after it are its summons'). Shadow Fiend is npc_dota_hero_nevermore in models/heroes/shadow_fiend,
+so the path cannot be made from the name.
 
 ### `gameAssetEntries`
 
@@ -2936,10 +2967,11 @@ A set, as the builder puts it on; see itemSets.
 ### `AssetCopy`
 
 ```ts
-export type AssetCopy = { from: string; to: string } | { from: string; hero: string; activities: string[] }
+export type AssetCopy = { from: string; to: string; optional?: boolean } | { from: string; hero: string; activities: string[] }
 ```
 
-A file in the game's archive staged under another path in the built VPK. A hero's own model
+A file in the game's archive staged under another path in the built VPK; an `optional` one (a
+picture the game has in some of its folders only) is left out when the game has not got it. A hero's own model
 names the hero instead of a path: where its model lives is in the hero's script, which the
 table does not say, and it goes in with the item's activity modifiers taken off (arcana.ts asModel).
 
@@ -3130,6 +3162,45 @@ dropped (the chosen style, if not the first, stays as the only one: src/item-bui
 and the chosen effect is inserted into visuals. The donor model/particles stay named as the paid
 item in items_game, while assetCopies still describe the stock-path overrides the built VPK
 should carry, and sounds and voices the soundevents it rewrites (src/item-sounds.ts).
+
+## src/item-portraits.ts
+
+A hero's HUD portrait and minimap icon as an item builder pick makes them, written once for the
+whole build: two picks want the same two files, and the build keeps the first file of a path it is
+given, so the second pick's change would have been lost.
+- the portrait: the HUD draws the hero's model with the camera and lights scripts/npc/portraits.txt
+  gives its path, so an arcana's model under the plain path is framed and lit for the plain model.
+  Its own settings are written under the plain path (Drow's arcana has a camera of its own);
+- the minimap icon: drawn out of a sprite sheet that scripts/mod_textures.txt cuts up by name, so
+  the plain icon's sprite is cut where the item's is.
+Both files are written whole, as the game's with those entries changed, and only when something
+changed. The approach is BetterSource2Viewer's character export (ExportPortraits,
+CharacterIcons.ReplaceSprites; MIT). The pictures themselves are plain copies (item-builder-assets.ts).
+
+### `withPortraits`
+
+```ts
+export function withPortraits(text: string, swaps: { from: string; to: string }[]): string
+```
+
+The portrait settings with each arcana's block written under the model it stands in for.
+
+### `withSprites`
+
+```ts
+export function withSprites(text: string, swaps: SpriteSwap[]): string
+```
+
+The sprite definitions with each swapped sprite cut out where its replacement is (a definition holds values only).
+
+### `portraitEntries`
+
+```ts
+export function portraitEntries(gamePath: string, portraits: PortraitSwap[], sprites: SpriteSwap[], log: (msg: string) => void = () => {}): VpkEntry[]
+```
+
+The portrait settings and sprite sheet of every pick, to go into the build ahead of the picks' own
+files. A hero whose own model the game does not name is left out and said in `log`.
 
 ## src/item-sounds.ts
 

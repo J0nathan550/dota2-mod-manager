@@ -99,13 +99,13 @@ export function buildPlan(text: string, v: ItemVisuals): PlanStep[] {
   for (const m of v.modifiers) {
     const at = m.style ? ` (style ${m.style})` : '';
     switch (m.type) {
-      case 'entity_model': out.push({ what: `the hero's own model${at}`, how: `${m.modifier} under the hero's model path; its animations that need the item's activity modifier made the plain ones (asModel)`, done: 'built' }); break;
+      case 'entity_model': out.push({ what: `the hero's own model${at}`, how: `${m.modifier} under the hero's model path; its animations that need the item's activity modifier made the plain ones (asModel); its portrait camera under the plain path (item-portraits.ts)`, done: 'built' }); break;
       case 'activity': out.push({ what: `activity modifier "${m.modifier}"${at}`, how: 'only the item switches it on: take it off the swapped model\'s animation clips (ANIM) and sequences (ASEQ), asModel; the game picks by the clips', done: 'built' }); break;
       case 'model': out.push({ what: `a model swap${at}`, how: `${m.modifier} under ${m.asset}`, done: 'by hand' }); break;
       case 'particle': out.push({ what: `a particle swap${at}`, how: `${m.modifier} under ${m.asset}; its children keep their own paths`, done: 'by hand' }); break;
       case 'particle_create': out.push({ what: `a particle the item creates${at}`, how: `${m.modifier}: no item creates it, so hang it as a child of a particle the hero always has, with a control point of its own on the attachment it is made for (withChildren)`, done: 'by hand' }); break;
       case 'sound': out.push({ what: `a sound${at}`, how: `${m.asset} plays ${m.modifier} instead: the item switches the event; a mod would put the new event's sound files under the old one's, not tried yet`, done: 'by hand' }); break;
-      case 'ability_icon': case 'icon_replacement_hero': case 'icon_replacement_hero_minimap': out.push({ what: `a picture (${m.type})${at}`, how: `${m.modifier} under ${m.asset}, in panorama/images`, done: 'built' }); break;
+      case 'ability_icon': case 'icon_replacement_hero': case 'icon_replacement_hero_minimap': out.push({ what: `a picture (${m.type})${at}`, how: `${m.modifier} under ${m.asset}, in panorama/images; the minimap's in its sprite sheet too (item-portraits.ts)`, done: 'built' }); break;
       default: out.push(ONLY_THE_ITEM.has(m.type)
         ? { what: `${m.type}${at}`, how: 'comes with the item itself, outside the files: a mod cannot give it', done: 'cannot' }
         : { what: `${m.type}${at}`, how: `${m.asset} -> ${m.modifier}: not met before, look at it`, done: 'by hand' });

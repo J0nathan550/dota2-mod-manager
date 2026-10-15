@@ -13,8 +13,27 @@ import { itemHeroes, type AssetCopy } from './item-builder-slots.ts';
 import { asModel } from './arcana.ts';
 import type { SoundSwap, VoiceCue } from './item-sounds.ts';
 
+/** A sprite of the game's sprite sheets shown in place of another (the minimap's hero icons are). */
+export interface SpriteSwap { sprite: string; as: string }
+
+/** A hero model whose HUD portrait settings go under the hero's own model's path. */
+export interface PortraitSwap { model: string; hero: string }
+
 /** What a pick asks of the game's files, beside its block. */
-export interface ItemAssets { assetCopies: AssetCopy[]; sounds: SoundSwap[]; voices: VoiceCue[] }
+export interface ItemAssets { assetCopies: AssetCopy[]; sounds: SoundSwap[]; voices: VoiceCue[]; portraits: PortraitSwap[]; sprites: SpriteSwap[] }
+
+/**
+ * The folders under panorama/images each kind of picture swap is shown from: the hero's portrait
+ * in the top bar and the hero picker, its minimap icon, its abilities. Not the shop items' pictures
+ * (inventory_icon): one Blink Dagger picture is every hero's, and Earthshaker's arcana would have
+ * put its own on all of them. BetterSource2Viewer's CharacterIcons (MIT) has the same table.
+ */
+const PICTURES: Record<string, string[]> = {
+  icon_replacement_hero: ['heroes', 'heroes/selection'],
+  icon_replacement_hero_minimap: ['heroes/icons'],
+  ability_icon: ['spellicons'],
+};
+const picture = (folder: string, name: string) => `panorama/images/${folder}/${normalizeAssetPath(name)}_png.vtex_c`;
 
 export function normalizeAssetPath(p: unknown): string {
   return String(p || '').toLowerCase().replace(/\\/g, '/').replace(/^\/+/, '');
@@ -41,6 +60,10 @@ function stockModelsOf(text: string, heroes: string[]): Set<string> {
  * written as the first (src/item-builder-styles.ts). Bladeform Legacy swaps every one of its
  * particles twice, once per style, and the second would have won.
  *
+ * The pictures it swaps for the hero's (PICTURES): its portrait, minimap icon and ability icons;
+ * the minimap draws its hero icons out of a sprite sheet as well, so that sprite is swapped too.
+ * An arcana's hero model brings its HUD portrait's camera and lights (src/item-portraits.ts).
+ *
  * Only what the hero has on without the item. An entity_model for another unit is left alone:
  * Rubick's arcana reshapes Spirit Bear and a dozen other heroes' summons for when he steals them.
  * So is a model swap for anything but a stock item of the hero's: Queen of Pain's arcana lists 40,
@@ -64,18 +87,24 @@ export function itemAssets(text: string, visuals: string, heroes: string[]): Ite
   const typed = (type: string, ...keys: string[]) => mods.filter((f) => (f.get('type') || '').toLowerCase() === type && keys.every((k) => f.get(k)));
   const activities = [...new Set(typed('activity', 'modifier').map((f) => f.get('modifier')!))];
   const stock = stockModelsOf(text, heroes);
+  const models = typed('entity_model', 'asset', 'modifier').filter((f) => heroes.includes(f.get('asset')!.toLowerCase()));
+  const pictures = Object.entries(PICTURES).flatMap(([type, folders]) => typed(type, 'asset', 'modifier')
+    .flatMap((f) => folders.map((folder) => ({ from: picture(folder, f.get('modifier')!), to: picture(folder, f.get('asset')!), optional: true }))));
   return {
     assetCopies: [
-      ...typed('entity_model', 'asset', 'modifier').filter((f) => heroes.includes(f.get('asset')!.toLowerCase()))
-        .map((f) => ({ from: f.get('modifier')!, hero: f.get('asset')!.toLowerCase(), activities })),
+      ...models.map((f) => ({ from: f.get('modifier')!, hero: f.get('asset')!.toLowerCase(), activities })),
       ...typed('model', 'asset', 'modifier').filter((f) => stock.has(normalizeAssetPath(f.get('asset'))))
         .map((f) => ({ from: f.get('modifier')!, to: f.get('asset')! })),
       ...typed('particle', 'asset', 'modifier').map((f) => ({ from: f.get('modifier')!, to: f.get('asset')! })),
+      ...pictures,
     ],
     sounds: typed('sound', 'asset', 'modifier').map((f) => ({ sound: f.get('asset')!, as: f.get('modifier')! })),
     // a persona's criterion "is_target" is said of the hero it targets, not of the one wearing it
     voices: typed('response_criteria', 'asset').filter((f) => !f.get('is_target'))
       .flatMap((f) => heroes.map((hero) => ({ hero, key: f.get('modifier') || 'customresponse', value: f.get('asset')! }))),
+    portraits: models.map((f) => ({ model: f.get('modifier')!, hero: f.get('asset')!.toLowerCase() })),
+    sprites: typed('icon_replacement_hero_minimap', 'asset', 'modifier')
+      .map((f) => ({ sprite: `minimap_heroicon_${f.get('asset')}`, as: `minimap_heroicon_${f.get('modifier')}` })),
   };
 }
 
@@ -84,7 +113,7 @@ export function itemAssets(text: string, visuals: string, heroes: string[]): Ite
  * after it are its summons'). Shadow Fiend is npc_dota_hero_nevermore in models/heroes/shadow_fiend,
  * so the path cannot be made from the name.
  */
-function heroModelPath(ix: ReturnType<typeof openVpkIndex>, hero: string): string {
+export function heroModelPath(ix: ReturnType<typeof openVpkIndex>, hero: string): string {
   const script = ix.read(`scripts/npc/heroes/${hero}.txt`);
   const model = script?.toString('latin1').match(/^\s*"Model"\s+"([^"]+)"/mi)?.[1];
   if (!model) throw new Error(t('Не найдена модель героя {0}', hero));
@@ -118,6 +147,7 @@ export function gameAssetEntries(gamePath: string, assetCopies: AssetCopy[] | nu
     const to = compiledAssetPath('hero' in copy ? heroModelPath(ix, copy.hero) : copy.to);
     if (!from || !to || seen.has(to)) continue;
     const data = ix.read(from);
+    if (!data && 'optional' in copy && copy.optional) continue;
     if (!data) throw new Error(t('Не найден {0}', from));
     out.push(entryAt(to, 'hero' in copy ? heroModelBytes(data, copy.activities) : data));
     seen.add(to);

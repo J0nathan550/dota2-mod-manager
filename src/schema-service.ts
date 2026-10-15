@@ -14,6 +14,8 @@ import * as itemBuilder from './item-builder.ts';
 import { createHarvest, type SchemaInstaller } from './schema-harvest.ts';
 import { createCosmetics } from './schema-cosmetics.ts';
 import { soundEntries, type SoundSwap, type VoiceCue } from './item-sounds.ts';
+import { portraitEntries } from './item-portraits.ts';
+import type { PortraitSwap, SpriteSwap } from './item-builder-assets.ts';
 import type { Settings } from './settings.ts';
 import type { Library } from './library.ts';
 
@@ -66,6 +68,8 @@ export function createSchemaService({ settings, library, installer, userDataDir,
     const out: schema.SchemaPatch[] = [];
     const sounds: SoundSwap[] = [];
     const voices: VoiceCue[] = [];
+    const portraits: PortraitSwap[] = [];
+    const sprites: SpriteSwap[] = [];
     for (const rec of library.list()) {
       if (rec.enabled === false) continue;
       if (rec.categoryId === 'cosmetic') {
@@ -75,6 +79,8 @@ export function createSchemaService({ settings, library, installer, userDataDir,
             out.push({ id: built.id, block: built.block, assets: itemBuilder.gameAssetEntries(game, built.assetCopies), source: rec.name });
             sounds.push(...built.sounds);
             voices.push(...built.voices);
+            portraits.push(...built.portraits);
+            sprites.push(...built.sprites);
             continue;
           }
           const target = schema.baseItemFor(vanillaText, rec.slot);
@@ -90,10 +96,16 @@ export function createSchemaService({ settings, library, installer, userDataDir,
       if (!Array.isArray(rec.schema)) continue;
       for (const d of rec.schema) out.push({ id: d.id, block: d.block, source: rec.name });
     }
-    // Two picks for one hero rewrite the same soundevents file, and the build keeps the first file
-    // of a path it is given: so every pick's sounds go into one copy, ahead of all other files.
+    // Two picks rewrite the same soundevents file, portrait settings and sprite sheet, and the build
+    // keeps the first file of a path it is given: so every pick's go into one copy of each, ahead
+    // of all other files.
     const first = out.find((p) => p.assets);
     if (first) {
+      try {
+        first.assets = [...portraitEntries(game, portraits, sprites), ...first.assets!];
+      } catch (err) {
+        log(`schema: the heroes' portraits left out of the build: ${(err as Error)?.message || err}`);
+      }
       try {
         first.assets = [...soundEntries(game, sounds, voices), ...first.assets!];
       } catch (err) {

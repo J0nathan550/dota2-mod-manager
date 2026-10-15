@@ -95,6 +95,13 @@ activity named again included. A model swapped in for a hero who lacks the item 
 item's modifier from both lists, by taking the entry out (`asModel`); the plain animations beside
 them lose that activity, which is what the game chooses when the modifier is on.
 
+**Portraits and icons.** The HUD draws the hero's model with the camera and lights that
+`scripts/npc/portraits.txt` gives its path, so an arcana model under the plain path brings its own
+settings under that path (`src/item-portraits.ts`). The hero's portrait, minimap icon and ability
+icons are pictures in `panorama/images` copied over the plain ones; the minimap also cuts its icon
+out of a sprite sheet named in `scripts/mod_textures.txt`. Shop item pictures are left alone: one
+picture is every hero's.
+
 ## Traps, and what catches each now
 
 | trap | what it looked like | caught by |

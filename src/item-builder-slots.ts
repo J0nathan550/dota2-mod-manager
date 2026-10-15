@@ -39,11 +39,12 @@ type SetPiece =
 export interface ItemSet { id: string; name: string; heroIds: string[]; fit: number; heroLabel: string; pieces: SetPiece[] }
 
 /**
- * A file in the game's archive staged under another path in the built VPK. A hero's own model
+ * A file in the game's archive staged under another path in the built VPK; an `optional` one (a
+ * picture the game has in some of its folders only) is left out when the game has not got it. A hero's own model
  * names the hero instead of a path: where its model lives is in the hero's script, which the
  * table does not say, and it goes in with the item's activity modifiers taken off (arcana.ts asModel).
  */
-export type AssetCopy = { from: string; to: string } | { from: string; hero: string; activities: string[] };
+export type AssetCopy = { from: string; to: string; optional?: boolean } | { from: string; hero: string; activities: string[] };
 
 const ITEM_HIDDEN_HEROES = new Set(['wisp', 'io']);
 
