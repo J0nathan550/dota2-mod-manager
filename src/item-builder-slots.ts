@@ -14,13 +14,15 @@ import { heroDisplayName } from './vpk.ts';
 import { t } from './i18n.ts';
 import { listItems, toUtf8, eachChild, blockBounds, itemSearchText, inferredItemSlot, type SchemaItem } from './schema.ts';
 import { styleTokens } from './item-builder-styles.ts';
+import { itemNote, type ItemNote } from './arcana-notes.ts';
 
 /** A slot of a hero the builder can dress, and the paid items that fit it. */
 export interface ItemSlot {
   slot: string; kind: 'item-effect'; base: string; targetId: string; equipSlot: string; heroIds: string[];
   heroLabel: string; slotLabel: string; label: string; icon: string;
-  /** `styles`: the name token of each style, for an item with more than one (src/item-builder-styles.ts) */
-  options: { id: string; name: string; styles?: string[] }[];
+  /** `styles`: the name token of each style, for an item with more than one (src/item-builder-styles.ts);
+   *  `note`: what is known to go wrong with it in the game, or that nobody has checked (src/arcana-notes.ts) */
+  options: { id: string; name: string; styles?: string[]; note?: ItemNote }[];
 }
 
 /** An item's visuals block, as text; null when it has none. */
@@ -45,8 +47,6 @@ export interface ItemSet { id: string; name: string; heroIds: string[]; fit: num
  * table does not say, and it goes in with the item's activity modifiers taken off (arcana.ts asModel).
  */
 export type AssetCopy = { from: string; to: string; optional?: boolean } | { from: string; hero: string; activities: string[] };
-
-const ITEM_HIDDEN_HEROES = new Set(['wisp', 'io']);
 
 const ITEM_SLOT_MATCH_ALIAS: Record<string, string> = {
   offhand_weapon: 'offhand',
@@ -85,10 +85,6 @@ export function canonicalItemSlot(slot: unknown): string {
 export function matchItemSlot(slot: unknown): string {
   const clean = canonicalItemSlot(slot);
   return ITEM_SLOT_MATCH_ALIAS[clean] || clean;
-}
-
-function hiddenItemHeroes(heroes: string[]): boolean {
-  return heroes.some((hero) => ITEM_HIDDEN_HEROES.has(canonicalHeroId(hero)));
 }
 
 function itemSlotId(heroIds: string[], slot: string): string {
@@ -151,7 +147,7 @@ export function itemSlots(text: string): ItemSlot[] {
     const equipSlot = canonicalItemSlot(inferredItemSlot(item));
     if (item.prefab !== 'default_item' || !equipSlot || isPersonaItem(item)) continue;
     const heroes = heroesOf(item);
-    if (!heroes.length || hiddenItemHeroes(heroes)) continue;
+    if (!heroes.length) continue;
     const heroIds = heroes.map(canonicalHeroId);
     const slotId = itemSlotId(heroIds, equipSlot);
     slots.set(slotId, {
@@ -176,7 +172,7 @@ export function itemSlots(text: string): ItemSlot[] {
     const equipSlot = canonicalItemSlot(inferredItemSlot(item));
     if (item.prefab !== 'wearable' || !equipSlot || !item.name || isPersonaItem(item)) continue;
     const heroes = heroesOf(item);
-    if (!heroes.length || hiddenItemHeroes(heroes)) continue;
+    if (!heroes.length) continue;
     const heroIds = heroes.map(canonicalHeroId);
     const slotId = itemSlotId(heroIds, equipSlot);
     let target: ItemSlot | null | undefined = slots.get(slotId);
@@ -185,8 +181,14 @@ export function itemSlots(text: string): ItemSlot[] {
       if (hits.length === 1) target = slots.get(hits[0]) || null;
     }
     if (!target) continue;
-    const styles = text.slice(item.start, item.end).includes('"styles"') ? styleTokens(visualsOf(text, item)) : [];
-    target.options.push({ id: item.id, name: toUtf8(item.name), ...(styles.length ? { styles } : {}) });
+    const block = text.slice(item.start, item.end);
+    const styles = block.includes('"styles"') ? styleTokens(visualsOf(text, item)) : [];
+    const noted = itemNote(heroIds, block);
+    target.options.push({
+      id: item.id, name: toUtf8(item.name),
+      ...(styles.length ? { styles } : {}),
+      ...(noted ? { note: { status: noted.status, text: t(noted.note) } } : {}),
+    });
   }
 
   const order = new Map(ITEM_SLOT_ORDER.map((slot, i) => [slot, i]));
@@ -227,7 +229,7 @@ export function itemSets(text: string, slots: Pick<ItemSlot, 'slot' | 'slotLabel
   for (const set of items) {
     if (set.prefab !== 'bundle' || !set.bundleItems || !set.bundleItems.length || /do not use/i.test(set.name)) continue;
     const heroes = itemHeroes(text, set);
-    if (!heroes.length || hiddenItemHeroes(heroes)) continue;
+    if (!heroes.length) continue;
     const pieces: SetPiece[] = [];
     const taken = new Set<string>();
     let collide = 0;

@@ -17,6 +17,7 @@ the code, not in this page.
 | [`src/app-context.ts`](#srcapp-contextts) | Everything the running app hands its IPC modules: the services src/main.ts builds at start, and the |
 | [`src/app-log.ts`](#srcapp-logts) | The app's own log: a small file every install keeps, so a support report (src/diagnostics.ts) |
 | [`src/app-page.ts`](#srcapp-pagets) | The page the main window loads. |
+| [`src/arcana-notes.ts`](#srcarcana-notests) | What an arcana does in the game once the item builder puts it on, as somebody played it. |
 | [`src/arcana-service.ts`](#srcarcana-servicets) | The arcana window's side in the main process (issue #118): what the window shows, and the mod it |
 | [`src/arcana.ts`](#srcarcanats) | An arcana as a mod, built from the game's own files: the look of an item a player has not got, |
 | [`src/atomic-file.ts`](#srcatomic-filets) | Replace a small file so that whoever reads it next - this process, or the next start after |
@@ -264,6 +265,97 @@ export function loadAppPage(win: Pick<BrowserWindow, 'loadURL' | 'loadFile'>, { 
 
 Loads the page into the window and returns its address, the one the navigation guard lets
 through, or null when a checkout was never built (an installer always carries the page).
+
+## src/arcana-notes.ts
+
+What an arcana does in the game once the item builder puts it on, as somebody played it.
+
+The builder offers every arcana, and most of them work. Some do not quite: an arcana carries its
+own animations, and a few of them need things only the real item turns on, so Razor walks facing
+backwards and Earthshaker can sink into the ground. An arcana that is not known to work carries a
+note to the slot window, so nobody picks Razor's and goes looking for what they did wrong.
+
+The table is J0nathan550's pass through every arcana on 2026-10-15 (pull request #275). A hero
+here by its id as items_game names it (npc_dota_hero_<id>). An arcana of a hero who is in neither
+list, one Valve adds later, is not checked yet and says so. Io has no arcana, but none of its
+items had been offered before, so all of them say they are not checked either.
+
+The notes are written in Russian, the app's source language, and translated where they are shown
+(src/i18n.ts).
+
+### `ItemNoteStatus`
+
+```ts
+export type ItemNoteStatus = 'issues' | 'broken' | 'untested'
+```
+
+What an arcana does in the game once the item builder puts it on, as somebody played it.
+
+The builder offers every arcana, and most of them work. Some do not quite: an arcana carries its
+own animations, and a few of them need things only the real item turns on, so Razor walks facing
+backwards and Earthshaker can sink into the ground. An arcana that is not known to work carries a
+note to the slot window, so nobody picks Razor's and goes looking for what they did wrong.
+
+The table is J0nathan550's pass through every arcana on 2026-10-15 (pull request #275). A hero
+here by its id as items_game names it (npc_dota_hero_<id>). An arcana of a hero who is in neither
+list, one Valve adds later, is not checked yet and says so. Io has no arcana, but none of its
+items had been offered before, so all of them say they are not checked either.
+
+The notes are written in Russian, the app's source language, and translated where they are shown
+(src/i18n.ts).
+
+### `ItemNote`
+
+```ts
+export interface ItemNote { status: ItemNoteStatus; text: string }
+```
+
+_No description in the source._
+
+### `ARCANA_NOTES`
+
+```ts
+export const ARCANA_NOTES: Readonly<Record<string, { status: Exclude<ItemNoteStatus, 'untested'>; note: string }>> =
+```
+
+Arcanas played and found wanting, by hero.
+
+### `ARCANAS_THAT_WORK`
+
+```ts
+export const ARCANAS_THAT_WORK: ReadonlySet<string> = new Set([ 'faceless_void', 'lina', 'monkey_king', 'ogre_magi', 'phantom_assassin', 'queenofpain', 'nevermore', 'techies', 'tidehunter', 'vengefulspirit', 'skeleton_king', 'zuus', ])
+```
+
+Arcanas played and found to work, by hero.
+
+### `HEROES_NOT_CHECKED`
+
+```ts
+export const HEROES_NOT_CHECKED: ReadonlySet<string> = new Set(['wisp'])
+```
+
+Heroes none of whose items have been played through the builder yet.
+
+### `isArcanaBlock`
+
+```ts
+export function isArcanaBlock(block: string): boolean
+```
+
+Whether an item's block in items_game says it is an arcana.
+
+### `itemNote`
+
+```ts
+export function itemNote(heroIds: string[], block: string): { status: ItemNoteStatus; note: string } | null
+```
+
+The note an item builder option carries, untranslated, or null when it has none.
+
+```
+@param heroIds  the item's heroes, as items_game names them without the npc_dota_hero_ prefix
+@param block    the item's block in items_game
+```
 
 ## src/arcana-service.ts
 

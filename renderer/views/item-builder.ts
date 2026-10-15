@@ -129,6 +129,7 @@ function drawSlot(key: number, st: SlotState): void {
     // the hero's own item first: choosing it is how a pick comes off
     options: byName([{ id: '', name: L`Стандартный`, tags: [] }, ...data.options], st.query).map((o) => ({
       id: o.id, name: o.name, tags: tagLine(o.tags), picked: o.id === st.selectedId, on: o.id ? live?.itemId === o.id : !live,
+      ...('note' in o && o.note ? { note: o.note } : {}),
     })),
     styles: styles ? styles.map((name, index) => ({ index, name, picked: index === st.style })) : null,
     effects: effects.length ? {

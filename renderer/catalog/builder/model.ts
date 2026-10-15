@@ -15,6 +15,8 @@ interface OptionCard {
   tags: string;
   picked: boolean;
   on: boolean;
+  /** what is known to go wrong with it in the game, or that nobody has checked (src/arcana-notes.ts) */
+  note?: { status: 'issues' | 'broken' | 'untested'; text: string };
 }
 
 interface EffectCard {

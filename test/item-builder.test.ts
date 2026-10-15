@@ -386,6 +386,9 @@ test('item cosmetics build one slot per hero part, infer missing stock slots, of
     ['item:axe:back', 'back', 'Back', ['9903', '9456']],
     ['item:bloodseeker:weapon', 'weapon', 'Weapon', ['9600']],
     ['item:bloodseeker:offhand_weapon', 'offhand_weapon', 'Offhand weapon', ['9601']],
+    // Io was left out of the builder from its first day, with no reason written down; it is offered
+    // now, its items marked as not checked in the game (src/arcana-notes.ts)
+    ['item:wisp:ambient', 'ambient', 'Effects', ['9701']],
     ['item:sniper:head', 'head', 'Head', ['9457']],
     ['item:sniper:back', 'back', 'Back', ['9455']],
     ['item:tidehunter:weapon', 'weapon', 'Weapon', ['9801']],
@@ -393,13 +396,15 @@ test('item cosmetics build one slot per hero part, infer missing stock slots, of
   const blade = slots.find((s) => s.slot === 'item:bloodseeker:weapon');
   assert.equal(blade?.label.includes('Bloodseeker'), true);
   assert.equal(blade?.label.includes('Weapon'), true);
-  assert.equal(slots.some((s) => s.slot.includes('wisp')), false);
+  assert.deepEqual(slots.find((s) => s.slot === 'item:wisp:ambient')?.options[0].note, { status: 'untested', text: 'Not checked in the game yet' });
+  assert.equal(blade?.options[0].note, undefined, 'an item nobody has reported on, and no arcana, carries no note');
   assert.equal(slots.some((s) => /persona/i.test(`${s.slot} ${s.label}`)), false);
   assert.deepEqual(builder.itemOptions(text), [
     { id: '9903', name: 'Axe Arcana Cape' },
     { id: '9456', name: 'Unsupported back' },
     { id: '9600', name: 'Bloodseeker main blade' },
     { id: '9601', name: 'Bloodseeker offhand blade' },
+    { id: '9701', name: 'Io Ambient', note: { status: 'untested', text: 'Not checked in the game yet' } },
     { id: '9457', name: 'No visuals here' },
     { id: '9455', name: 'Golden Full-Bore Bonanza' },
     { id: '9801', name: 'Tidehunter bonus anchor' },
@@ -703,7 +708,11 @@ test('an arcana is offered and dresses the stock item of its slot, the hero base
   const slot = builder.itemSlots(text).find((s) => s.equipSlot === 'hero_base');
   assert.equal(slot?.slot, 'item:juggernaut:hero_base');
   assert.equal(slot?.slotLabel, 'Hero base');
-  assert.deepEqual(slot?.options, [{ id: '9059', name: 'Bladeform Legacy' }], 'the arcana, and not the persona beside it');
+  // the arcana, and not the persona beside it, with what J0nathan550's pass found it does in the game
+  assert.deepEqual(slot?.options, [{
+    id: '9059', name: 'Bladeform Legacy',
+    note: { status: 'issues', text: 'No second run: once he buys boots he always runs with the sword in hand' },
+  }], 'the arcana, and not the persona beside it');
   assert.equal(builder.defaultItemForWearable(text, '9059')?.id, '811');
   assert.equal(builder.defaultItemForWearable(text, '9070'), null, 'a persona does not dress the stock base');
 });
