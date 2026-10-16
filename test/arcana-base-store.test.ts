@@ -10,10 +10,12 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { blobSha, createBaseStore, listingFromTree, BASES_REPO } from '../src/arcana-base-store.ts';
+import { blobSha, createBaseStore, listingFromTree, safeListing, BASES_REPO } from '../src/arcana-base-store.ts';
 import { entryPath } from '../src/vpk.ts';
 
 const RAW = `https://raw.githubusercontent.com/${BASES_REPO}/main/`;
+/** A request for the repository's git tree: by its host, as the store tells them apart. */
+const isTreeUrl = (url: string) => new URL(url).host === 'api.github.com';
 
 /** A repository: files by path, served as GitHub would, and every URL asked for. */
 function repo(files: Record<string, string>) {
@@ -23,7 +25,7 @@ function repo(files: Record<string, string>) {
   const fetchUrl = async (url: string, opts: { headers?: Record<string, string> }) => {
     asked.push(url);
     if (state.offline) throw new Error('fetch failed');
-    if (url.includes('api.github.com')) {
+    if (isTreeUrl(url)) {
       if (opts.headers?.['If-None-Match'] === state.etag) return new Response(null, { status: 304 });
       return new Response(JSON.stringify(tree()), { headers: { etag: state.etag } });
     }
@@ -79,7 +81,7 @@ test('a file that is not what the repository names is refused, and the base is n
   const tree = JSON.stringify(r.tree());
   // a mirror, or a push halfway through, hands over other bytes than the tree names
   const fetchUrl: typeof r.fetchUrl = async (url, opts) => {
-    if (url.includes('api.github.com')) return new Response(tree);
+    if (isTreeUrl(url)) return new Response(tree);
     if (url.endsWith('juggernaut.vmdl_c')) return new Response('something a mirror made up');
     return r.fetchUrl(url, opts);
   };
@@ -116,7 +118,7 @@ test('where the tree cannot be read, the manifest in the repository is the list'
   const listing = listingFromTree(r.tree());
   r.state.manifest = JSON.stringify({ bases: listing });
   const fetchUrl: typeof r.fetchUrl = async (url, opts) => {
-    if (url.includes('api.github.com')) throw new Error('api.github.com unreachable');
+    if (isTreeUrl(url)) throw new Error('api.github.com unreachable');
     return r.fetchUrl(url, opts);
   };
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'd2mm-basestore-'));
@@ -162,4 +164,30 @@ test('a base the repository does not have is said so, and nothing is kept', asyn
   const { s, said } = store(t, r);
   assert.equal(await s.want('feast_of_abscession'), false);
   assert.ok(said.some((m) => /has no base feast_of_abscession/.test(m)));
+});
+
+test("a list can only name a base's models, materials and particles, each by a git hash", async (t) => {
+  const sha = blobSha(Buffer.from('x'));
+  assert.deepEqual(safeListing({
+    planetfall: {
+      'models/heroes/earthshaker/earthshaker.vmdl_c': sha,
+      'scripts/npc/npc_heroes.txt': sha,
+      'particles/../scripts/vscripts/addon_game_mode.vjs_c': sha,
+      'materials/x.vmat_c': '../../../ready.json',
+      'particles/fine.vpcf_c': 'ABC',
+    },
+    '../escape': { 'models/a.vmdl_c': sha },
+  }), { planetfall: { 'models/heroes/earthshaker/earthshaker.vmdl_c': sha } });
+  // a mirror's manifest naming a script, with the bytes to match its own hash: the script never comes
+  const script = 'local x = 1';
+  const fetchUrl = async (url: string) => {
+    if (isTreeUrl(url)) throw new Error('unreachable');
+    if (url.endsWith('manifest.json')) return new Response(JSON.stringify({ bases: { planetfall: { 'scripts/vscripts/evil.lua': blobSha(Buffer.from(script)) } } }));
+    return new Response(script);
+  };
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'd2mm-basestore-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const s = createBaseStore({ dir, fetchUrl });
+  assert.equal(await s.want('planetfall'), false);
+  assert.equal(s.entries('planetfall'), null);
 });

@@ -30,9 +30,14 @@ function countFiles(dir) {
 
 function runTool(exe, cwd) {
   return new Promise((resolve, reject) => {
-    // `start` gives it a console of its own with real handles; spawning it directly hands it NUL
-    // for stdout, which rich takes for a redirect and crashes on
-    const child = spawn('cmd.exe', ['/c', 'start', '""', '/wait', exe], { cwd, stdio: 'ignore', windowsHide: false });
+    // Start-Process gives it a console of its own with real handles; spawning it from Node hands it
+    // ours, or NUL, which rich takes for a redirect and crashes on. The path goes in through the
+    // environment and the script is a constant: `cmd /c start` parsed the path as a command line,
+    // so a folder with an & in its name would have run what came after it.
+    const script = '$p = Start-Process -FilePath $env:VPKTOOL_EXE -WorkingDirectory $env:VPKTOOL_DIR -PassThru -Wait; exit $p.ExitCode';
+    const child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], {
+      cwd, stdio: 'ignore', windowsHide: true, env: { ...process.env, VPKTOOL_EXE: exe, VPKTOOL_DIR: cwd },
+    });
     const timer = setTimeout(() => { child.kill(); reject(new Error(`VPKTool still running after ${TIMEOUT_MS / 60000} min`)); }, TIMEOUT_MS);
     child.on('error', (err) => { clearTimeout(timer); reject(err); });
     child.on('exit', (code) => { clearTimeout(timer); resolve(code); });

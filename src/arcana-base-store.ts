@@ -42,6 +42,30 @@ export type Listing = Record<string, Record<string, string>>;
 /** git's hash of a file: what the repository's tree names it by. */
 export const blobSha = (data: Buffer) => crypto.createHash('sha1').update(`blob ${data.length}\0`).update(data).digest('hex');
 
+const SHA = /^[0-9a-f]{40}$/;
+const BASE_ID = /^[a-z0-9_]+$/i;
+/** what a base holds: the hero's models, materials and particles (tools/clean-arcana-bases.mjs) */
+const BASE_FILE = /^(models|materials|particles)\/[^\\:]+$/i;
+
+/**
+ * Only what a base can be out of a list: a file under models/, materials/ or particles/, named by
+ * a git hash. The list can come from a mirror (the manifest), and a mirror that served a list of
+ * its own and the bytes to match it could otherwise have put a file at any path of the user's
+ * game pak, a script among them; and a hash is a file name here, so it has to be one.
+ */
+export function safeListing(raw: unknown): Listing {
+  const out: Listing = {};
+  if (!raw || typeof raw !== 'object') return out;
+  for (const [id, files] of Object.entries(raw as Record<string, unknown>)) {
+    if (!BASE_ID.test(id) || !files || typeof files !== 'object') continue;
+    for (const [rel, sha] of Object.entries(files as Record<string, unknown>)) {
+      if (typeof sha !== 'string' || !SHA.test(sha) || !BASE_FILE.test(rel) || rel.split('/').some((s) => s === '..' || s === '.' || !s)) continue;
+      (out[id] ||= {})[rel] = sha;
+    }
+  }
+  return out;
+}
+
 /** The bases in a git tree (GET /git/trees/<branch>?recursive=1): every file under src/<id>/ but the VPK of them. */
 export function listingFromTree(tree: { tree?: { path: string; type: string; sha: string }[] }): Listing {
   const out: Listing = {};
@@ -50,7 +74,7 @@ export function listingFromTree(tree: { tree?: { path: string; type: string; sha
     if (!m || (!m[2].includes('/') && m[2].toLowerCase().endsWith('.vpk'))) continue;
     (out[m[1]] ||= {})[m[2]] = e.sha;
   }
-  return out;
+  return safeListing(out);
 }
 
 const sameFiles = (a: Record<string, string> | undefined, b: Record<string, string>) =>
@@ -91,7 +115,8 @@ export function createBaseStore({ dir, onReady = () => {}, log = () => {}, fetch
   const blobs = path.join(dir, 'blobs');
   const readyFile = path.join(dir, 'ready.json');
   const listingFile = path.join(dir, 'listing.json');
-  const blobPath = (sha: string) => path.join(blobs, sha);
+  // a hash is the file's name, so only ever a hash: never a path somebody wrote into a list
+  const blobPath = (sha: string) => { if (!SHA.test(sha)) throw new Error(`not a file hash: ${sha}`); return path.join(blobs, sha); };
   const ready = (): Listing => readJson<Listing>(readyFile, {});
   /** the repository's list, asked for once a run: a second base picked a minute later needs no new one */
   let listing: Promise<Listing> | null = null;
@@ -104,7 +129,7 @@ export function createBaseStore({ dir, onReady = () => {}, log = () => {}, fetch
     try {
       const res = await fetchUrl(TREE_URL, { headers: { Accept: 'application/vnd.github+json', ...(cached.etag ? { 'If-None-Match': cached.etag } : {}) } });
       // an unchanged tree answers 304, which GitHub does not count against the hourly limit
-      if (res.status === 304 && cached.bases) return cached.bases;
+      if (res.status === 304 && cached.bases) return safeListing(cached.bases);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const bases = listingFromTree(await res.json() as Parameters<typeof listingFromTree>[0]);
       fs.mkdirSync(dir, { recursive: true });
@@ -116,13 +141,13 @@ export function createBaseStore({ dir, onReady = () => {}, log = () => {}, fetch
     try {
       const res = await fetchUrl(rawUrl('manifest.json'), { small: true });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const bases = (await res.json() as { bases?: Listing }).bases;
-      if (bases && typeof bases === 'object') return bases;
+      const bases = safeListing((await res.json() as { bases?: unknown }).bases);
+      if (Object.keys(bases).length) return bases;
       throw new Error('no bases in it');
     } catch (err) {
       log(`arcana bases: no manifest.json either: ${(err as Error).message}`);
     }
-    if (cached.bases) return cached.bases;
+    if (cached.bases) return safeListing(cached.bases);
     throw new Error('the list of bases could not be had');
   }
 

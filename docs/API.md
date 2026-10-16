@@ -346,6 +346,17 @@ export const blobSha = (data: Buffer) => crypto.createHash('sha1').update(`blob 
 
 git's hash of a file: what the repository's tree names it by.
 
+### `safeListing`
+
+```ts
+export function safeListing(raw: unknown): Listing
+```
+
+Only what a base can be out of a list: a file under models/, materials/ or particles/, named by
+a git hash. The list can come from a mirror (the manifest), and a mirror that served a list of
+its own and the bytes to match it could otherwise have put a file at any path of the user's
+game pak, a script among them; and a hash is a file name here, so it has to be one.
+
 ### `listingFromTree`
 
 ```ts
