@@ -92,15 +92,15 @@ const NO_INSTALLER: SchemaInstaller = {
   installedSize: () => { throw new Error('the installer was not meant to be asked'); },
 };
 
-function service(t: TestContext, { values = {}, installer = NO_INSTALLER, text = GAME_TABLE } = {} as {
-  values?: Record<string, unknown>; installer?: SchemaInstaller; text?: string;
+function service(t: TestContext, { values = {}, installer = NO_INSTALLER, text = GAME_TABLE, bases } = {} as {
+  values?: Record<string, unknown>; installer?: SchemaInstaller; text?: string; bases?: Parameters<typeof createSchemaService>[0]['bases'];
 }) {
   const g = game(t, text);
   fs.mkdirSync(g.userData, { recursive: true });
   const library = new Library(g.userData);
   const settings = settingsIn({ dotaGamePath: g.game, schemaPatch: false, ...values });
   const said: string[] = [];
-  const svc = createSchemaService({ settings, library, installer, userDataDir: g.userData, log: (m) => said.push(m) });
+  const svc = createSchemaService({ settings, library, installer, userDataDir: g.userData, log: (m) => said.push(m), bases });
   return { ...g, library, settings, svc, said };
 }
 
@@ -433,4 +433,63 @@ test("a pick's sounds go into the built table's pak, its styles are named from t
   assert.equal(readVpkEntryFile(built, 'soundevents/game_sounds_heroes/game_sounds_earthshaker.vsndevts_c'), null);
   assert.match(deployedTable(s.game) as string, /Bracers of the Cavern Luminar/);
   assert.ok(s.said.some((m) => /sounds left out of the build/.test(m)), s.said.join('\n'));
+});
+
+// ---------- an arcana base under the picks ----------
+
+/** Juggernaut's stock body, mask and sword, Bladeform Legacy (9059), its mask (30261) and another sword (4015). */
+const JUGG = ['"used_by_heroes"', '{', '\t"npc_dota_hero_juggernaut"\t\t"1"', '}'];
+const wear = (id: string, name: string, prefab: string, slot: string, model: string) =>
+  item(id, [`"name"\t\t"${name}"`, `"prefab"\t\t"${prefab}"`, `"item_slot"\t\t"${slot}"`, `"model_player"\t\t"${model}"`, ...JUGG]);
+const ARCANA_TABLE = table([
+  wear('800', "Juggernaut's Body", 'default_item', 'body', 'models/heroes/juggernaut/juggernaut_body.vmdl'),
+  wear('801', "Juggernaut's Mask", 'default_item', 'head', 'models/heroes/juggernaut/jugg_mask.vmdl'),
+  wear('802', "Juggernaut's Sword", 'default_item', 'weapon', 'models/heroes/juggernaut/jugg_sword.vmdl'),
+  wear('9059', 'Bladeform Legacy', 'wearable', 'body', 'models/items/juggernaut/arcana_body.vmdl'),
+  wear('30261', 'Bladeform Legacy - Mask', 'wearable', 'head', 'models/items/juggernaut/arcana_mask.vmdl'),
+  wear('4015', 'Four-Fangs the Swordbreaker', 'wearable', 'weapon', 'models/items/juggernaut/four_fangs.vmdl'),
+  ...FILLER,
+]);
+const VALVE = {
+  'models/items/juggernaut/arcana_body.vmdl_c': "Valve's arcana body",
+  'models/items/juggernaut/arcana_mask.vmdl_c': "Valve's arcana mask",
+  'models/items/juggernaut/four_fangs.vmdl_c': 'Four-Fangs',
+};
+const BASE = {
+  'models/heroes/juggernaut/juggernaut_body.vmdl_c': 'fixed body',
+  'models/heroes/juggernaut/jugg_mask.vmdl_c': 'fixed mask',
+  'models/heroes/juggernaut/jugg_sword.vmdl_c': "the arcana's sword",
+};
+
+test('an arcana picked puts its base on once it is here, its own part takes the fixed one, and another item wins its slot', (t) => {
+  let here = false;
+  const wanted: string[] = [];
+  const bases = {
+    entries: (id: string) => (here && id === 'bladeform_legacy' ? Object.entries(BASE).map(([p, d]) => entryAt(p, Buffer.from(d))) : null),
+    want: async (id: string) => { wanted.push(id); return false; },
+  };
+  const s = service(t, { values: { schemaPatch: true }, text: ARCANA_TABLE, bases });
+  fs.writeFileSync(path.join(s.game, 'dota', 'pak01_dir.vpk'), schema.buildSchemaVpk(ARCANA_TABLE,
+    Object.entries(VALVE).map(([p, d]) => entryAt(p, Buffer.from(d)))));
+  const built = (p: string) => readVpkEntryFile(path.join(s.game, patcher.FOLDER, schema.SCHEMA_VPK), p)?.data.toString() ?? null;
+
+  s.svc.pickCosmetic('item:juggernaut:body', '9059', 'Bladeform Legacy', '');
+  assert.deepEqual(wanted, ['bladeform_legacy'], 'asked for');
+  assert.equal(built('models/heroes/juggernaut/juggernaut_body.vmdl_c'), "Valve's arcana body", "not here yet: the game's files, no waiting");
+  assert.ok(s.said.some((m) => /bladeform_legacy is not here yet/.test(m)));
+
+  here = true;
+  s.svc.pickCosmetic('item:juggernaut:head', '30261', 'Bladeform Legacy - Mask', '');
+  assert.equal(built('models/heroes/juggernaut/juggernaut_body.vmdl_c'), 'fixed body');
+  assert.equal(built('models/heroes/juggernaut/jugg_mask.vmdl_c'), 'fixed mask', "the arcana's own part: the base's, not Valve's");
+  assert.equal(built('models/heroes/juggernaut/jugg_sword.vmdl_c'), "the arcana's sword", 'a slot nothing was picked for: the base fills it');
+
+  s.svc.pickCosmetic('item:juggernaut:weapon', '4015', 'Four-Fangs the Swordbreaker', '');
+  assert.equal(built('models/heroes/juggernaut/jugg_sword.vmdl_c'), 'Four-Fangs', 'another item for a slot: the user picked it');
+  assert.equal(built('models/heroes/juggernaut/juggernaut_body.vmdl_c'), 'fixed body', 'and the arcana stays under it');
+
+  s.library.setEnabled(s.library.list().find((r) => r.itemId === '9059')!.id, false);
+  s.svc.refresh();
+  assert.equal(built('models/heroes/juggernaut/juggernaut_body.vmdl_c'), null, 'the arcana off: its base goes with it');
+  assert.equal(built('models/heroes/juggernaut/jugg_mask.vmdl_c'), "Valve's arcana mask", 'and the mask alone is Valve\'s again');
 });

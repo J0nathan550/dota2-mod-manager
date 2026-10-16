@@ -29,7 +29,7 @@ function picture(): Buffer {
 }
 
 /** A game folder whose pak01 has the arcana's model, picture, eyes and one tinted particle. */
-function world(t: TestContext, { withArcana = true } = {}) {
+function world(t: TestContext, { withArcana = true, bases }: { withArcana?: boolean; bases?: Parameters<typeof createArcanaService>[0]['bases'] } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'd2mm-arcana-service-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const game = path.join(dir, 'game');
@@ -50,7 +50,7 @@ function world(t: TestContext, { withArcana = true } = {}) {
   const installer = new Installer({ userDataDir: path.join(dir, 'userdata'), getGamePath: () => game, getLangSuffix: () => 'russian', onProgress: () => {} });
   const library = new Library(path.join(dir, 'userdata'));
   const said: string[] = [];
-  const service = createArcanaService({ gamePath: () => game, installer, library, log: (m) => said.push(m) });
+  const service = createArcanaService({ gamePath: () => game, installer, library, log: (m) => said.push(m), bases });
   return { game, lang, installer, library, service, said };
 }
 
@@ -117,4 +117,31 @@ test('a Dota update that reached it builds it again with its colour, and leaves 
   assert.deepEqual(feet(w.lang, after), [255, 193, 220]);
   assert.deepEqual(w.service.rebuild([other.id]), [], 'a mod the update did not reach is left alone');
   assert.ok(w.said.some((m) => /after the update/.test(m)));
+});
+
+test("with Terrorblade's base here the whole arcana is built from it, in the chosen colour; until it is, from the game's", (t) => {
+  const BODY = 'models/heroes/terrorblade/terrorblade.vmdl_c';
+  let here = false;
+  const wanted: string[] = [];
+  const bases = {
+    // the base's particle has the gem's red written in, as J0nathan550 compiled it
+    entries: () => (here ? [
+      entryAt(`${HERO}/terrorblade_feet_effects.vpcf_c`, particle(encodeKv3({ obj: [['m_ConstantColor', { i32s: [255, 60, 40, 255] }]] }))),
+      entryAt(BODY, Buffer.from('the base body')),
+    ] : null),
+    want: async (id: string) => { wanted.push(id); return false; },
+  };
+  const w = world(t, { bases });
+  const before = w.service.install([40, 120, 255], 'mod');
+  assert.deepEqual(wanted, ['fractal_horns_of_inner_abysm']);
+  const pakOf = (rec: LibRecord) => openVpkIndex(path.join(w.lang, rec.files[0].relPath));
+  assert.notEqual(pakOf(before).read(BODY)?.toString(), 'the base body', "not here: Valve's model, as before");
+
+  here = true;
+  const rec = w.service.install([40, 120, 255], 'mod');
+  assert.equal(pakOf(rec).read(BODY)?.toString(), 'the base body');
+  const [r, g, b] = feet(w.lang, rec);
+  assert.ok(b > r && b > g, `the base's red moved to blue, not ${[r, g, b]}`);
+  assert.deepEqual(feet(w.lang, w.service.install([255, 60, 40], 'mod')), [255, 60, 40], 'in its own colour, as it was made');
+  assert.equal(w.library.list().length, 1, 'one record all along');
 });

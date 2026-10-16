@@ -183,7 +183,7 @@ export function itemSlots(text: string): ItemSlot[] {
     if (!target) continue;
     const block = text.slice(item.start, item.end);
     const styles = block.includes('"styles"') ? styleTokens(visualsOf(text, item)) : [];
-    const noted = itemNote(heroIds, block);
+    const noted = itemNote(heroIds, block, item.id);
     target.options.push({
       id: item.id, name: toUtf8(item.name),
       ...(styles.length ? { styles } : {}),

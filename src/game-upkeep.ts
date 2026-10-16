@@ -68,7 +68,7 @@ export function createGameUpkeep({
   settings: Pick<Settings, 'get' | 'set'>;
   installer: Pick<Installer, 'lostToVerify' | 'restoreDeployed' | 'migrateLegacyPriorityPaks' | 'migrateSlotZones' | 'mergeMultiPartRecords' | 'sweepStaged'>;
   library: Library;
-  schemaService: Pick<ReturnType<typeof createSchemaService>, 'heal' | 'migrate' | 'migrateCosmeticSettings'>;
+  schemaService: Pick<ReturnType<typeof createSchemaService>, 'heal' | 'migrate' | 'migrateCosmeticSettings' | 'askForBases'>;
   /** which mods a patch reached (src/update-impact.ts) */
   updateImpact?: Pick<ReturnType<typeof createUpdateImpact>, 'check' | 'clear'> | null;
   /** builds again, from the new files, the mods the app built out of the game's (src/arcana-service.ts) */
@@ -219,6 +219,9 @@ export function createGameUpkeep({
       // a Dota update overwrites the patched gameinfo and moves the item table: put both back
       // before the user gets a chance to launch the game with a half-applied setup
       { name: 'repair at start', run: repair.repairAtStart },
+      // the arcana bases the picks need, if the last run closed before one came or a newer one
+      // was published: in the background, and what comes builds the table again
+      { name: 'arcana bases', run: () => schemaService.askForBases() },
     ], diag);
   }
 

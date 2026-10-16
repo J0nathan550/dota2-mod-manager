@@ -61,6 +61,24 @@ export function constantExpression(value: number[]): Buffer {
 }
 
 /**
+ * The numbers of an expression that is a constant and nothing else, as constantExpression writes
+ * one and as the Workshop Tools compile a colour typed in (an arcana base's gem colour,
+ * src/arcana-base-color.ts); null for anything else.
+ */
+export function constantOf(code: Buffer): number[] | null {
+  for (const n of [3, 4]) {
+    if (code.length !== n * 5 + 4 || code[n * 5] !== FUNC || code[n * 5 + 1] !== (n === 4 ? FLOAT4 : FLOAT3) || code[n * 5 + 2] !== 0 || code[n * 5 + 3] !== RETURN) continue;
+    const out: number[] = [];
+    for (let i = 0; i < n; i++) {
+      if (code[i * 5] !== FLOAT) return null;
+      out.push(code.readFloatLE(i * 5 + 1));
+    }
+    return out;
+  }
+  return null;
+}
+
+/**
  * An expression with every read of one attribute replaced by a constant (three or four numbers),
  * its jumps moved to where their targets now are.
  * @returns the new bytecode, or null when it reads no such attribute or holds an opcode not known

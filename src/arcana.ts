@@ -167,6 +167,23 @@ export function asModel(file: Buffer, modifier?: string): Buffer {
   return out;
 }
 
+/** The arcana's portraits and ability icons out of pak01, under the plain ones' names. */
+export function arcanaPictures(pak01: string, set: string): Map<string, Buffer> {
+  const def = ARCANA_SETS[set];
+  if (!def) throw new Error(`arcana: no set ${set}`);
+  const index = openVpkIndex(pak01);
+  const all = listVpkPathsFile(pak01);
+  const have = new Set(all);
+  const files = new Map<string, Buffer>();
+  const { under, mark, hero } = def.images;
+  for (const p of all) {
+    if (!under.some((u) => p.startsWith(u)) || !p.includes(hero) || !p.includes(mark)) continue;
+    const plain = p.replace(mark, '');
+    if (have.has(plain)) files.set(plain, index.read(p) as Buffer);
+  }
+  return files;
+}
+
 /** The arcana in the chosen colour, as one VPK from the game's pak01. */
 export function buildArcana({ pak01, set, target }: { pak01: string; set: string; target: Rgb }): {
   vpk: Buffer; files: number; changed: number; failed: { path: string; error: string }[];
@@ -174,17 +191,10 @@ export function buildArcana({ pak01, set, target }: { pak01: string; set: string
   const def = ARCANA_SETS[set];
   if (!def) throw new Error(`arcana: no set ${set}`);
   const index = openVpkIndex(pak01);
-  const all = listVpkPathsFile(pak01);
-  const have = new Set(all);
   const r = recolorFiles({ pak01, set: def.recolor, target, bake: true });
   const files = r.files;
   for (const [to, { from, modifier }] of Object.entries(def.models)) files.set(to, asModel(index.read(from) as Buffer, modifier));
-  const { under, mark, hero } = def.images;
-  for (const p of all) {
-    if (!under.some((u) => p.startsWith(u)) || !p.includes(hero) || !p.includes(mark)) continue;
-    const plain = p.replace(mark, '');
-    if (have.has(plain)) files.set(plain, index.read(p) as Buffer);
-  }
+  for (const [p, data] of arcanaPictures(pak01, set)) files.set(p, data);
   const host = withChildren(index.read(def.host.from) as Buffer, def.host.children);
   files.set(def.host.at, recolorResource(host, target, { gem: RECOLOR_SETS[def.recolor].gem, bake: true }).file);
   return { vpk: buildVpk([...files].map(([p, f]) => entryAt(p, f))), files: files.size, changed: r.changed, failed: r.failed };

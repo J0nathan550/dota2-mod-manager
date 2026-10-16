@@ -17,6 +17,9 @@ the code, not in this page.
 | [`src/app-context.ts`](#srcapp-contextts) | Everything the running app hands its IPC modules: the services src/main.ts builds at start, and the |
 | [`src/app-log.ts`](#srcapp-logts) | The app's own log: a small file every install keeps, so a support report (src/diagnostics.ts) |
 | [`src/app-page.ts`](#srcapp-pagets) | The page the main window loads. |
+| [`src/arcana-base-color.ts`](#srcarcana-base-colorts) | An arcana base (src/arcana-bases.ts) in a colour of the user's: Terrorblade's, for the arcana |
+| [`src/arcana-base-store.ts`](#srcarcana-base-storets) | The arcana bases (src/arcana-bases.ts) brought down from their repository and kept here, so a |
+| [`src/arcana-bases.ts`](#srcarcana-basests) | Arcana bases: an arcana rebuilt by hand in Valve's Workshop Tools so that it works as the hero's |
 | [`src/arcana-notes.ts`](#srcarcana-notests) | What an arcana does in the game once the item builder puts it on, as somebody played it. |
 | [`src/arcana-service.ts`](#srcarcana-servicets) | The arcana window's side in the main process (issue #118): what the window shows, and the mod it |
 | [`src/arcana.ts`](#srcarcanats) | An arcana as a mod, built from the game's own files: the look of an item a player has not got, |
@@ -266,6 +269,222 @@ export function loadAppPage(win: Pick<BrowserWindow, 'loadURL' | 'loadFile'>, { 
 Loads the page into the window and returns its address, the one the navigation guard lets
 through, or null when a checkout was never built (an installer always carries the page).
 
+## src/arcana-base-color.ts
+
+An arcana base (src/arcana-bases.ts) in a colour of the user's: Terrorblade's, for the arcana
+window (src/arcana-service.ts), which offers his arcana in any RGB (issue #118).
+
+Valve's arcana takes its colour from its gem at run time, and src/recolor.ts rewrites what the
+files do with the gem's colour. The base has no gem to read: it was compiled with the gem's
+colour, Reflection's Shade, written in. So here it is that colour that moves:
+- a particle's written colours move as far as the gem's colour moves to the chosen one (shade
+  with `from`), so the base in red is the base as it was made;
+- a material that read `$GemColor` has the colour as a constant expression in its place, the
+  numbers as somebody typed them in the tools (0.235 for 60/255): one near the gem's colour
+  becomes the chosen one, any other constant stays.
+A file that cannot be read goes in as it is, in the base's own colour, and is counted.
+
+### `materialInColor`
+
+```ts
+export function materialInColor(file: Buffer, target: Rgb, gem: Rgb): { file: Buffer; changed: number }
+```
+
+A base's material with the gem's colour, written in, made the chosen one.
+
+### `baseInColor`
+
+```ts
+export function baseInColor(entries: VpkEntry[], target: Rgb, gem: Rgb): { entries: VpkEntry[]; changed: number; failed: string[] }
+```
+
+A base's files in the chosen colour: its particles and materials moved, every other file as it is.
+
+## src/arcana-base-store.ts
+
+The arcana bases (src/arcana-bases.ts) brought down from their repository and kept here, so a
+build reads them from disk like it reads pak01.
+
+The repository holds each base as its compiled files under src/<id>/, and a VPK of the same
+files beside them for people to try by hand; the app takes the files. What is there is read from
+the repository's git tree, which names every file with git's hash of it: nothing to keep in step
+by hand, and each file is checked against its hash, so a mirror (src/net.ts) can be trusted with
+the bytes. The tree comes from api.github.com, which has no mirrors; where it cannot be reached a
+manifest.json in the repository, the same list (tools/arcana-bases-manifest.mjs writes it), comes
+through them; and where neither can, the list from last time.
+
+On disk: blobs/<hash>, one per file whatever base it is in (both of Juggernaut's styles share
+most of theirs), and ready.json, each base that is all here with the hash of each of its files.
+A base is only in ready.json once every file of it is, so a build never takes half of one, and
+an update keeps the old one in use until the new one is whole.
+
+Builds are synchronous and a download is not: `entries` answers from disk at once, null when a
+base is not here, and `want` starts bringing it down and calls onReady once it is, for the
+caller to build again. Everything that needs the network fails quietly into the log.
+
+### `BASES_REPO`
+
+```ts
+export const BASES_REPO = 'J0nathan550/d2pfx-arcana-fixes'
+```
+
+Where the bases are published, owner/name on GitHub.
+
+### `Listing`
+
+```ts
+export type Listing = Record<string, Record<string, string>>
+```
+
+Each base's files: its path inside the base, as the repository spells it -> git's hash of it.
+
+### `blobSha`
+
+```ts
+export const blobSha = (data: Buffer) => crypto.createHash('sha1').update(`blob ${data.length}\0`).update(data).digest('hex')
+```
+
+git's hash of a file: what the repository's tree names it by.
+
+### `listingFromTree`
+
+```ts
+export function listingFromTree(tree: { tree?: { path: string; type: string; sha: string }[] }): Listing
+```
+
+The bases in a git tree (GET /git/trees/<branch>?recursive=1): every file under src/<id>/ but the VPK of them.
+
+### `BaseStoreDeps`
+
+```ts
+export interface BaseStoreDeps
+```
+
+What a store is made with: where it keeps the bases, and whom it tells.
+
+### `createBaseStore`
+
+```ts
+export function createBaseStore({ dir, onReady = () => {}, log = () => {}, fetchUrl = fetchDefault }: BaseStoreDeps)
+```
+
+The bases on disk, and bringing one down when a build needs it (the header says how).
+
+### `BaseStore`
+
+```ts
+export type BaseStore = ReturnType<typeof createBaseStore>
+```
+
+A store as the builder and the arcana window take it.
+
+## src/arcana-bases.ts
+
+Arcana bases: an arcana rebuilt by hand in Valve's Workshop Tools so that it works as the hero's
+own look, for the item builder (src/schema-service.ts) and the arcana window (src/arcana-service.ts).
+
+The builder's arcana is Valve's model under the plain hero's path, and the pass through every
+arcana (src/arcana-notes.ts) found a dozen that do not survive it: Razor walks backwards, Pudge's
+back is torn, Juggernaut has one run. J0nathan550 compiled each of those again, body, animations,
+particles and materials, with every file at the path the plain hero reads, and published them in
+a repository of their own (src/arcana-base-store.ts brings them down). This file says which base
+a pick puts on and how its files share the hero with the user's other picks.
+
+A base is the whole arcana set made the hero's default look: the body at the hero's model path,
+and each of the set's parts at the path of the stock item of its slot (Razor's
+models/heroes/razor/razor_armor is the arcana's armour). So the rule is by path:
+- a pick of another item for a slot writes that slot's path, and the user's pick wins: the base
+  goes under every pick (schema.deploy `beneath`);
+- a pick of one of the set's own parts would write Valve's version of the part there, which is
+  what the base fixes: such a pick leaves the base's paths to the base (`withoutBaseFiles`).
+
+### `ArcanaBase`
+
+```ts
+export interface ArcanaBase
+```
+
+One base: a folder of the repository, and the picks it is for.
+
+### `ARCANA_BASES`
+
+```ts
+export const ARCANA_BASES: readonly ArcanaBase[] = [
+```
+
+Rubick's Magus Cypher has 41 styles, colours of its particles, and Crystal Maiden's Frost
+Avalanche four: their bases are the first style's, and the others build from Valve's files as
+before. Spectre's first style works from Valve's (the 2026-10-15 pass), so only the second has one.
+
+### `TERRORBLADE_BASE`
+
+```ts
+export const TERRORBLADE_BASE = 'fractal_horns_of_inner_abysm'
+```
+
+The Terrorblade base, which the arcana window builds in the user's colour.
+
+### `BasePick`
+
+```ts
+export interface BasePick { itemId: string; style: number }
+```
+
+A pick as the builder keeps it: the item and its style (src/item-builder-styles.ts styleOf).
+
+### `hasBase`
+
+```ts
+export function hasBase(itemId: string): boolean
+```
+
+Whether an arcana has a base for any of its styles: the builder's note on it is then out of date.
+
+### `chooseBases`
+
+```ts
+export function chooseBases(picks: BasePick[], bases: readonly ArcanaBase[] = ARCANA_BASES): ArcanaBase[]
+```
+
+The bases a set of picks puts on, at most one per hero, in the order of the picks.
+
+### `ReadyBase`
+
+```ts
+export interface ReadyBase { base: ArcanaBase; entries: VpkEntry[]; paths: Set<string> }
+```
+
+A base whose files are here, and the paths it fills, as entryPath writes them.
+
+### `readyBase`
+
+```ts
+export function readyBase(base: ArcanaBase, entries: VpkEntry[]): ReadyBase
+```
+
+A base with the files the store had for it, and the paths they fill.
+
+### `basesHere`
+
+```ts
+export function basesHere(picks: BasePick[], store: { entries(id: string): VpkEntry[] | null; want(id: string): Promise<boolean> }, log: (msg: string) => void = () => {}): ReadyBase[]
+```
+
+The bases a set of picks puts on that are here, for a build. One that is not is asked for, and
+the build goes on from the game's files: the store builds again once it has come
+(src/services.ts), so a pick never waits on the network. One that is here is asked for too, once
+a run, for a newer version of it.
+
+### `withoutBaseFiles`
+
+```ts
+export function withoutBaseFiles(itemId: string, assets: VpkEntry[], ready: ReadyBase[]): VpkEntry[]
+```
+
+A pick's own files with the ones a base of its set provides taken out: Valve's version of a part
+under the stock path is what the base replaced. A pick of anything else keeps every file, and
+wins over the base where both write one path.
+
 ## src/arcana-notes.ts
 
 What an arcana does in the game once the item builder puts it on, as somebody played it.
@@ -281,6 +500,10 @@ list, one Valve adds later, is not checked yet and says so. Io was offered for t
 2.12.0 with all its items marked as not checked; J0nathan550 played them on 2026-10-15 and its
 arcana, Benevolent Companion, works, so Io joined the arcanas that do.
 
+An arcana with a base (src/arcana-bases.ts) carries no note: the base is that arcana compiled
+again by hand to fix what the table says, and the build takes it. The table stays, for an
+arcana whose base has not come down yet and for what each base was made to fix.
+
 The notes are written in Russian, the app's source language, and translated where they are shown
 (src/i18n.ts).
 
@@ -290,21 +513,7 @@ The notes are written in Russian, the app's source language, and translated wher
 export type ItemNoteStatus = 'issues' | 'broken' | 'untested'
 ```
 
-What an arcana does in the game once the item builder puts it on, as somebody played it.
-
-The builder offers every arcana, and most of them work. Some do not quite: an arcana carries its
-own animations, and a few of them need things only the real item turns on, so Razor walks facing
-backwards and Earthshaker can sink into the ground. An arcana that is not known to work carries a
-note to the slot window, so nobody picks Razor's and goes looking for what they did wrong.
-
-The table is J0nathan550's pass through every arcana on 2026-10-15 (pull request #275). A hero
-here by its id as items_game names it (npc_dota_hero_<id>). An arcana of a hero who is in neither
-list, one Valve adds later, is not checked yet and says so. Io was offered for the first time in
-2.12.0 with all its items marked as not checked; J0nathan550 played them on 2026-10-15 and its
-arcana, Benevolent Companion, works, so Io joined the arcanas that do.
-
-The notes are written in Russian, the app's source language, and translated where they are shown
-(src/i18n.ts).
+_No description in the source._
 
 ### `ItemNote`
 
@@ -350,7 +559,7 @@ Whether an item's block in items_game says it is an arcana.
 ### `itemNote`
 
 ```ts
-export function itemNote(heroIds: string[], block: string): { status: ItemNoteStatus; note: string } | null
+export function itemNote(heroIds: string[], block: string, itemId?: string): { status: ItemNoteStatus; note: string } | null
 ```
 
 The note an item builder option carries, untranslated, or null when it has none.
@@ -358,6 +567,7 @@ The note an item builder option carries, untranslated, or null when it has none.
 ```
 @param heroIds  the item's heroes, as items_game names them without the npc_dota_hero_ prefix
 @param block    the item's block in items_game
+@param itemId   the item's id, for whether it has a base
 ```
 
 ## src/arcana-service.ts
@@ -418,7 +628,7 @@ A colour from the window: three whole numbers 0-255, or nothing.
 ### `createArcanaService`
 
 ```ts
-export function createArcanaService({ gamePath, installer, library, log = () => {} }: { gamePath: () => string | null | undefined; installer: Pick<Installer, 'langFolder' | 'ensureLangFolder' | 'usedPakNames' | 'allocatePak' | 'writeInto' | 'remove' | 'slotBase' | 'moveToSlot' | 'setEnabled'>; library: Pick<Library, 'list' | 'add' | 'update'>; log?: (msg: string) => void; })
+export function createArcanaService({ gamePath, installer, library, log = () => {}, bases }: { gamePath: () => string | null | undefined; installer: Pick<Installer, 'langFolder' | 'ensureLangFolder' | 'usedPakNames' | 'allocatePak' | 'writeInto' | 'remove' | 'slotBase' | 'moveToSlot' | 'setEnabled'>; library: Pick<Library, 'list' | 'add' | 'update'>; log?: (msg: string) => void; /** the arcana bases kept on disk (src/arcana-base-store.ts): the whole arcana is built from *  Terrorblade's when it is here, and from Valve's files until it is */ bases?: Pick<BaseStore, 'entries' | 'want'>
 ```
 
 _No description in the source._
@@ -496,6 +706,14 @@ off the sequences alone, the arcana still stood still through its attacks, and t
 still swung with its sequences pointed elsewhere (both found on the bench, issue #118). An entry
 pointed at the activity instead of taken off counts as a modifier: the entries are taken off, and
 both blocks written anew.
+
+### `arcanaPictures`
+
+```ts
+export function arcanaPictures(pak01: string, set: string): Map<string, Buffer>
+```
+
+The arcana's portraits and ability icons out of pak01, under the plain ones' names.
 
 ### `buildArcana`
 
@@ -1625,7 +1843,7 @@ Run each step in order; one that throws is logged as skipped and the rest still 
 ### `createGameUpkeep`
 
 ```ts
-export function createGameUpkeep({ settings, installer, library, schemaService, updateImpact = null, rebuildGenerated, reconcileCursors, diag, send, isRunning = () => dotaIsRunning(), findGame, validGame, retryMs = REPAIR_RETRY_MS, now = Date.now, }: { settings: Pick<Settings, 'get' | 'set'>; installer: Pick<Installer, 'lostToVerify' | 'restoreDeployed' | 'migrateLegacyPriorityPaks' | 'migrateSlotZones' | 'mergeMultiPartRecords' | 'sweepStaged'>; library: Library; schemaService: Pick<ReturnType<typeof createSchemaService>, 'heal' | 'migrate' | 'migrateCosmeticSettings'>
+export function createGameUpkeep({ settings, installer, library, schemaService, updateImpact = null, rebuildGenerated, reconcileCursors, diag, send, isRunning = () => dotaIsRunning(), findGame, validGame, retryMs = REPAIR_RETRY_MS, now = Date.now, }: { settings: Pick<Settings, 'get' | 'set'>; installer: Pick<Installer, 'lostToVerify' | 'restoreDeployed' | 'migrateLegacyPriorityPaks' | 'migrateSlotZones' | 'mergeMultiPartRecords' | 'sweepStaged'>; library: Library; schemaService: Pick<ReturnType<typeof createSchemaService>, 'heal' | 'migrate' | 'migrateCosmeticSettings' | 'askForBases'>
 ```
 
 _No description in the source._
@@ -3792,6 +4010,16 @@ export function constantExpression(value: number[]): Buffer
 
 An expression that is a constant (three or four numbers) and nothing else.
 
+### `constantOf`
+
+```ts
+export function constantOf(code: Buffer): number[] | null
+```
+
+The numbers of an expression that is a constant and nothing else, as constantExpression writes
+one and as the Workshop Tools compile a colour typed in (an arcana base's gem colour,
+src/arcana-base-color.ts); null for anything else.
+
 ### `withConstant`
 
 ```ts
@@ -5514,23 +5742,27 @@ _No description in the source._
 ### `shade`
 
 ```ts
-export function shade(color: Rgb, target: Rgb): Rgb
+export function shade(color: Rgb, target: Rgb, from?: Rgb): Rgb
 ```
 
 One colour moved to the chosen one. A colour with almost no saturation has no hue to move and is
 left alone; anything else takes the target's hue, with saturation and brightness scaled by it.
+With `from`, the colour the file was made in (an arcana base has its gem's written in,
+src/arcana-base-color.ts), it moves as far as `from` would to the target instead: the base in
+its own colour stays as it was made.
 
 ### `recolorResource`
 
 ```ts
-export function recolorResource(file: Buffer, target: Rgb, { gem, own = true, bake = false }: { gem?: Rgb; own?: boolean; bake?: boolean } = {}):
+export function recolorResource(file: Buffer, target: Rgb, { gem, own = true, bake = false, from }: { gem?: Rgb; own?: boolean; bake?: boolean; from?: Rgb } = {}):
 ```
 
 One compiled particle in the chosen colour. With `gem`, the gem's tint is pointed at the chosen
 colour; with `own` (the default), a particle the gem does not tint has its written colours moved.
 With `bake`, for a hero who has no gem (src/arcana.ts), that tint is off and what is written is
 what shows: a particle the gem would tint starts from what the tint would have given, and its
-other colours move to the chosen one.
+other colours move to the chosen one. With `from`, the written colours move as far as `from`
+would (shade).
 
 ### `recolorMaterial`
 
@@ -6343,7 +6575,7 @@ The patch and the built table as Settings shows them; the patcher's own state is
 ### `createSchemaService`
 
 ```ts
-export function createSchemaService({ settings, library, installer, userDataDir, log = () => {} }: { settings: Pick<Settings, 'get' | 'set'>; library: Library; installer: SchemaInstaller; userDataDir: string; log?: (msg: string) => void; })
+export function createSchemaService({ settings, library, installer, userDataDir, log = () => {}, bases }: { settings: Pick<Settings, 'get' | 'set'>; library: Library; installer: SchemaInstaller; userDataDir: string; log?: (msg: string) => void; bases?: Pick<BaseStore, 'entries' | 'want'>; })
 ```
 
 The item table and the search-path patch, kept in step with the library and the installed game.
@@ -6392,7 +6624,7 @@ Pack the merged schema as a one-file VPK holding items_game.txt and the files it
 ### `deploy`
 
 ```ts
-export function deploy({ gamePath, folder, patches, base = readGameSchema(gamePath) }: { gamePath: string; folder: string; patches: SchemaPatch[]; base?: GameSchema; }): MergeResult & { stamp: string; bytes: number; items: number }
+export function deploy({ gamePath, folder, patches, base = readGameSchema(gamePath), beneath = [] }: { gamePath: string; folder: string; patches: SchemaPatch[]; base?: GameSchema; beneath?: VpkEntry[]; }): MergeResult & { stamp: string; bytes: number; items: number }
 ```
 
 Build the schema and put it in the mod folder. Always rebuilt from the installed
@@ -6405,6 +6637,8 @@ it is read here as before.
 ```
 @param opts.folder  the mod folder the schema VPK is written into
 @param opts.base    the game's own table, if already read
+@param opts.beneath files every patch's own win over where both have a path: an arcana base
+(src/arcana-bases.ts), which another item picked for one of its slots replaces there
 ```
 
 ### `undeploy`

@@ -51,16 +51,18 @@ export function buildSchemaVpk(text: string, extraEntries: VpkEntry[] = []): Buf
  * it is read here as before.
  * @param opts.folder  the mod folder the schema VPK is written into
  * @param opts.base    the game's own table, if already read
+ * @param opts.beneath files every patch's own win over where both have a path: an arcana base
+ *   (src/arcana-bases.ts), which another item picked for one of its slots replaces there
  */
-export function deploy({ gamePath, folder, patches, base = readGameSchema(gamePath) }: {
-  gamePath: string; folder: string; patches: SchemaPatch[]; base?: GameSchema;
+export function deploy({ gamePath, folder, patches, base = readGameSchema(gamePath), beneath = [] }: {
+  gamePath: string; folder: string; patches: SchemaPatch[]; base?: GameSchema; beneath?: VpkEntry[];
 }): MergeResult & { stamp: string; bytes: number; items: number } {
   const merged = mergeSchema(base.text, patches);
   const checked = validateSchema(merged.text, base.text);
   const extras: VpkEntry[] = [];
   const seen = new Set<string>();
-  for (const p of patches || []) {
-    for (const en of p.assets || []) {
+  for (const assets of [...(patches || []).map((p) => p.assets || []), beneath]) {
+    for (const en of assets) {
       const key = `${en.folder}/${en.name}.${en.ext}`.toLowerCase();
       if (seen.has(key)) continue;
       seen.add(key);

@@ -11,9 +11,14 @@
  * 2.12.0 with all its items marked as not checked; J0nathan550 played them on 2026-10-15 and its
  * arcana, Benevolent Companion, works, so Io joined the arcanas that do.
  *
+ * An arcana with a base (src/arcana-bases.ts) carries no note: the base is that arcana compiled
+ * again by hand to fix what the table says, and the build takes it. The table stays, for an
+ * arcana whose base has not come down yet and for what each base was made to fix.
+ *
  * The notes are written in Russian, the app's source language, and translated where they are shown
  * (src/i18n.ts).
  */
+import { hasBase } from './arcana-bases.ts';
 
 export type ItemNoteStatus = 'issues' | 'broken' | 'untested';
 export interface ItemNote { status: ItemNoteStatus; text: string }
@@ -55,10 +60,12 @@ export function isArcanaBlock(block: string): boolean {
  * The note an item builder option carries, untranslated, or null when it has none.
  * @param heroIds  the item's heroes, as items_game names them without the npc_dota_hero_ prefix
  * @param block    the item's block in items_game
+ * @param itemId   the item's id, for whether it has a base
  */
-export function itemNote(heroIds: string[], block: string): { status: ItemNoteStatus; note: string } | null {
+export function itemNote(heroIds: string[], block: string, itemId?: string): { status: ItemNoteStatus; note: string } | null {
   if (heroIds.some((h) => HEROES_NOT_CHECKED.has(h))) return { status: 'untested', note: UNTESTED };
   if (!isArcanaBlock(block)) return null;
+  if (itemId && hasBase(itemId)) return null;
   for (const h of heroIds) {
     const known = ARCANA_NOTES[h];
     if (known) return { status: known.status, note: known.note };

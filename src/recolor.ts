@@ -74,12 +74,17 @@ function fromHsv([h, s, v]: [number, number, number]): Rgb {
 /**
  * One colour moved to the chosen one. A colour with almost no saturation has no hue to move and is
  * left alone; anything else takes the target's hue, with saturation and brightness scaled by it.
+ * With `from`, the colour the file was made in (an arcana base has its gem's written in,
+ * src/arcana-base-color.ts), it moves as far as `from` would to the target instead: the base in
+ * its own colour stays as it was made.
  */
-export function shade(color: Rgb, target: Rgb): Rgb {
-  const [, s, v] = toHsv(color);
+export function shade(color: Rgb, target: Rgb, from?: Rgb): Rgb {
+  const [h, s, v] = toHsv(color);
   if (s < 0.1) return color;
   const [th, ts, tv] = toHsv(target);
-  return fromHsv([th, Math.min(1, s * ts), Math.min(1, v * tv)]);
+  if (!from) return fromHsv([th, Math.min(1, s * ts), Math.min(1, v * tv)]);
+  const [fh, fs, fv] = toHsv(from);
+  return fromHsv([(h + th - fh + 360) % 360, Math.min(1, s * (fs ? ts / fs : 1)), Math.min(1, v * (fv ? tv / fv : 1))]);
 }
 
 /** The operators that colour a particle from control point 15, where the game puts a gem's colour. */
@@ -183,7 +188,7 @@ function bakeTint(kv: Kv3Block, tints: Tint[], target: Rgb): { changed: number; 
 }
 
 /** The colours written in a particle moved to the chosen one (but those `skip` names); `skipped` counts those with no room. */
-function shadeColors(kv: Kv3Block, target: Rgb, skip?: RegExp): { changed: number; skipped: number } {
+function shadeColors(kv: Kv3Block, target: Rgb, skip?: RegExp, from?: Rgb): { changed: number; skipped: number } {
   let changed = 0;
   let skipped = 0;
   for (const a of kv.arrays) {
@@ -195,7 +200,7 @@ function shadeColors(kv: Kv3Block, target: Rgb, skip?: RegExp): { changed: numbe
     const cells = a.cells as NonNullable<(typeof a.cells)[number]>[];
     const rgb = cells.slice(0, 3).map((c) => readCell(kv, c)) as Rgb;
     if (rgb.some((n) => n < 0 || n > 255)) continue;
-    const next = shade(rgb, target);
+    const next = shade(rgb, target, from);
     if (next.every((n, i) => n === rgb[i])) continue;
     next.forEach((n, i) => writeCell(kv, cells[i], n));
     changed++;
@@ -208,9 +213,10 @@ function shadeColors(kv: Kv3Block, target: Rgb, skip?: RegExp): { changed: numbe
  * colour; with `own` (the default), a particle the gem does not tint has its written colours moved.
  * With `bake`, for a hero who has no gem (src/arcana.ts), that tint is off and what is written is
  * what shows: a particle the gem would tint starts from what the tint would have given, and its
- * other colours move to the chosen one.
+ * other colours move to the chosen one. With `from`, the written colours move as far as `from`
+ * would (shade).
  */
-export function recolorResource(file: Buffer, target: Rgb, { gem, own = true, bake = false }: { gem?: Rgb; own?: boolean; bake?: boolean } = {}): {
+export function recolorResource(file: Buffer, target: Rgb, { gem, own = true, bake = false, from }: { gem?: Rgb; own?: boolean; bake?: boolean; from?: Rgb } = {}): {
   file: Buffer; changed: number; skipped: number;
 } {
   const block = dataBlock(file);
@@ -219,7 +225,7 @@ export function recolorResource(file: Buffer, target: Rgb, { gem, own = true, ba
   const tints = gemTints(kv);
   const baked = bake && tints.length ? bakeTint(kv, tints, target) : none;
   const tint = gem ? retarget(kv, tints, gem, target) : none;
-  const written = bake && tints.length ? shadeColors(kv, target, INITIAL) : (bake ? own : own && !tint.changed) ? shadeColors(kv, target) : none;
+  const written = bake && tints.length ? shadeColors(kv, target, INITIAL, from) : (bake ? own : own && !tint.changed) ? shadeColors(kv, target, undefined, from) : none;
   const changed = baked.changed + tint.changed + written.changed;
   return { file: changed ? block.replace(kv.encode()) : file, changed, skipped: baked.skipped + tint.skipped + written.skipped };
 }

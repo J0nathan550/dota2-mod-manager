@@ -708,11 +708,9 @@ test('an arcana is offered and dresses the stock item of its slot, the hero base
   const slot = builder.itemSlots(text).find((s) => s.equipSlot === 'hero_base');
   assert.equal(slot?.slot, 'item:juggernaut:hero_base');
   assert.equal(slot?.slotLabel, 'Hero base');
-  // the arcana, and not the persona beside it, with what J0nathan550's pass found it does in the game
-  assert.deepEqual(slot?.options, [{
-    id: '9059', name: 'Bladeform Legacy',
-    note: { status: 'issues', text: 'No second run: once he buys boots he always runs with the sword in hand' },
-  }], 'the arcana, and not the persona beside it');
+  // the arcana, and not the persona beside it; with no note, as its base fixes what J0nathan550's
+  // pass found (src/arcana-bases.ts)
+  assert.deepEqual(slot?.options, [{ id: '9059', name: 'Bladeform Legacy' }], 'the arcana, and not the persona beside it');
   assert.equal(builder.defaultItemForWearable(text, '9059')?.id, '811');
   assert.equal(builder.defaultItemForWearable(text, '9070'), null, 'a persona does not dress the stock base');
 });

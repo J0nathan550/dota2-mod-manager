@@ -20,7 +20,9 @@ import * as discordAuth from './discord-auth.ts';
 import { DiscordPresence } from './discord-presence.ts';
 import { createSchemaService } from './schema-service.ts';
 import { createUpdateImpact, impactMods } from './update-impact.ts';
-import { createArcanaService } from './arcana-service.ts';
+import { createArcanaService, type Generated } from './arcana-service.ts';
+import { createBaseStore } from './arcana-base-store.ts';
+import { TERRORBLADE_BASE } from './arcana-bases.ts';
 import { clientVersion } from './patch-watch.ts';
 import { createRemoteConfig } from './remote-config.ts';
 // the download chain, so a mirror named in that signed file joins it
@@ -71,7 +73,19 @@ export function createServices({ userData, appVersion, sendProgress, diag, fetch
   });
   const presence = new DiscordPresence({ clientId: discordAuth.CLIENT_ID, onDiag: diag });
   const presenceStatus = createPresenceStatus({ presence, settings, library, installer });
-  const schemaService = createSchemaService({ settings, library, installer, userDataDir: userData, log: diag });
+  /* The arcana bases (src/arcana-bases.ts): asked for by the build that needs one, which goes on
+     from the game's files meanwhile, and built again with it once it is here: the builder's table,
+     and the arcana window's Terrorblade if it was built whole from Valve's files. */
+  const bases = createBaseStore({
+    dir: path.join(userData, 'arcana-bases'),
+    log: diag,
+    onReady: (id) => {
+      schemaService.refresh();
+      if (id !== TERRORBLADE_BASE) return;
+      arcana.rebuild(library.list().filter((r) => (r.generated as Generated | undefined)?.mode === 'mod').map((r) => r.id));
+    },
+  });
+  const schemaService = createSchemaService({ settings, library, installer, userDataDir: userData, log: diag, bases });
   // which installed mods a Dota update reached (src/update-impact.ts)
   const updateImpact = createUpdateImpact({
     file: path.join(userData, 'update-impact.json'),
@@ -81,7 +95,7 @@ export function createServices({ userData, appVersion, sendProgress, diag, fetch
     log: diag,
   });
   // the arcana built out of the game's own files, in a colour of the user's (src/arcana.ts)
-  const arcana = createArcanaService({ gamePath: () => settings.get('dotaGamePath'), installer, library, log: diag });
+  const arcana = createArcanaService({ gamePath: () => settings.get('dotaGamePath'), installer, library, log: diag, bases });
   const cursors = createCursors({ installer, library, settings });
   const adopt = createAdopt({ installer, library, schemaService });
   // what the app can be told after it shipped: a feature switched off with a reason, and dated

@@ -60,6 +60,7 @@ function stand({ game = null as string | null, running = false, stored = {} as R
       heal: () => { asked.push('heal'); return heal(); },
       migrate: () => ({ changed: 0 }),
       migrateCosmeticSettings: () => { asked.push('cosmetics'); },
+      askForBases: () => { asked.push('bases'); },
     } as never,
     updateImpact: reach ? { check: reach, clear: (id: string) => { cleared.push(id); return true; } } : null,
     rebuildGenerated: rebuild,
@@ -219,7 +220,7 @@ test('a step that fails at start is logged and the ones after it still run', asy
   const s = stand({ game: fakeGame(t), failLegacy: true, slotsMoved: 3 });
   await s.upkeep.atStart();
   assert.ok(s.said.includes('legacy pak migration skipped: boom'));
-  assert.deepEqual(s.asked, ['legacy', 'slots', 'merge', 'cursors', 'sweep', 'cosmetics', 'heal']);
+  assert.deepEqual(s.asked, ['legacy', 'slots', 'merge', 'cursors', 'sweep', 'cosmetics', 'heal', 'bases']);
   assert.equal(s.store.get('slotZones'), 1);
   assert.deepEqual(s.upkeep.takeSlotMigration(), { moved: 3 });
   assert.equal(s.upkeep.takeSlotMigration(), null);

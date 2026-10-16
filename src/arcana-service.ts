@@ -14,9 +14,12 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { buildArcana } from './arcana.ts';
+import { arcanaPictures, buildArcana } from './arcana.ts';
 import { buildRecolor, RECOLOR_SETS, type Rgb } from './recolor.ts';
-import { openVpkIndex } from './vpk.ts';
+import { TERRORBLADE_BASE } from './arcana-bases.ts';
+import { baseInColor } from './arcana-base-color.ts';
+import type { BaseStore } from './arcana-base-store.ts';
+import { buildVpk, entryAt, entryPath, openVpkIndex } from './vpk.ts';
 import { pngFromVtex } from './vtex.ts';
 import { t } from './i18n.ts';
 import type { Installer } from './installer.ts';
@@ -52,11 +55,14 @@ export function validColor(c: unknown): Rgb | null {
   return Array.isArray(c) && c.length === 3 && c.every((n) => Number.isInteger(n) && n >= 0 && n <= 255) ? c as Rgb : null;
 }
 
-export function createArcanaService({ gamePath, installer, library, log = () => {} }: {
+export function createArcanaService({ gamePath, installer, library, log = () => {}, bases }: {
   gamePath: () => string | null | undefined;
   installer: Pick<Installer, 'langFolder' | 'ensureLangFolder' | 'usedPakNames' | 'allocatePak' | 'writeInto' | 'remove' | 'slotBase' | 'moveToSlot' | 'setEnabled'>;
   library: Pick<Library, 'list' | 'add' | 'update'>;
   log?: (msg: string) => void;
+  /** the arcana bases kept on disk (src/arcana-base-store.ts): the whole arcana is built from
+   *  Terrorblade's when it is here, and from Valve's files until it is */
+  bases?: Pick<BaseStore, 'entries' | 'want'>;
 }) {
   const pak01 = () => { const g = gamePath(); return g ? path.join(g, 'dota', 'pak01_dir.vpk') : null; };
   /* What the game has, read once per pak01: its index is 384 000 entries and the tools screen
@@ -69,7 +75,16 @@ export function createArcanaService({ gamePath, installer, library, log = () => 
     const pak = pak01();
     if (!pak) throw new Error(t('Не указана папка игры'));
     const args = { pak01: pak, set: params.set, target: params.color };
-    return params.mode === 'mod' ? buildArcana(args).vpk : buildRecolor(args).vpk;
+    if (params.mode !== 'mod') return buildRecolor(args).vpk;
+    const base = bases?.entries(TERRORBLADE_BASE);
+    void bases?.want(TERRORBLADE_BASE);
+    if (!base) return buildArcana(args).vpk;
+    // the base under the plain paths in the chosen colour, the arcana's pictures from the game
+    const colored = baseInColor(base, params.color, RECOLOR_SETS[params.set].gem);
+    if (colored.failed.length) log(`arcana: ${colored.failed.length} files of the base kept their own colour, first ${colored.failed[0]}`);
+    const files = new Map(colored.entries.map((e) => [entryPath(e), e.data]));
+    for (const [p, data] of arcanaPictures(pak, params.set)) if (!files.has(p)) files.set(p, data);
+    return buildVpk([...files].map(([p, data]) => entryAt(p, data)));
   }
 
   /** The built pak written into a slot in the early part of the load order; the files it took. */
