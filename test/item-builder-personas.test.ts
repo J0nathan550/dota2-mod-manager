@@ -38,6 +38,8 @@ const TABLE = ['"items_game"', '{', '\t"items"', '\t{',
     modifier({ type: 'persona', persona: '1' }),
     modifier({ type: 'entity_model', asset: 'npc_dota_hero_pudge', modifier: 'models/heroes/pudge_cute/pudge_cute.vmdl' }),
     modifier({ type: 'particle', asset: 'particles/units/heroes/hero_pudge/pudge_meathook.vpcf', modifier: 'particles/units/heroes/hero_pudge_cute/pudge_cute_meathook.vpcf' }),
+    modifier({ type: 'icon_replacement_hero_minimap', asset: 'npc_dota_hero_pudge', modifier: 'npc_dota_hero_pudge_persona1' }),
+    modifier({ type: 'ability_icon', asset: 'pudge_rot', modifier: 'pudge/persona_toy_butcher/pudge_rot_persona1' }),
   ].join('\n')),
   item('696', 'Pudge Persona Weapon', 'default_item', 'weapon_persona_1', 'models/heroes/pudge_cute/pudge_cute_hook.vmdl'),
   item('712', 'Pudge Persona Costume', 'default_item', 'armor_persona_1', 'models/heroes/pudge_cute/pudge_cute_costume.vmdl'),
@@ -139,4 +141,15 @@ test("a persona's pick is written over the plain hero's stock item, and the pers
   assert.doesNotMatch(persona.block, /"type"\s+"persona"/, 'switched, the game would put on the persona\'s own stock items');
   assert.doesNotMatch(persona.block, /entity_model/, 'the body is the base, under the plain path');
   assert.match(persona.block, /pudge_cute_meathook/, 'its particles stay');
+});
+
+test("a persona's pictures: its portrait in the top bar and the hero picker as well as the minimap, and its ability icons", () => {
+  const pictures = itemEffectPatch(TABLE, '13786', '', '709').assetCopies
+    .flatMap((c) => ('to' in c && c.to.startsWith('panorama/') ? [`${c.from} -> ${c.to}`] : []));
+  assert.deepEqual(pictures.sort(), [
+    'panorama/images/heroes/icons/npc_dota_hero_pudge_persona1_png.vtex_c -> panorama/images/heroes/icons/npc_dota_hero_pudge_png.vtex_c',
+    'panorama/images/heroes/npc_dota_hero_pudge_persona1_png.vtex_c -> panorama/images/heroes/npc_dota_hero_pudge_png.vtex_c',
+    'panorama/images/heroes/selection/npc_dota_hero_pudge_persona1_png.vtex_c -> panorama/images/heroes/selection/npc_dota_hero_pudge_png.vtex_c',
+    'panorama/images/spellicons/pudge/persona_toy_butcher/pudge_rot_persona1_png.vtex_c -> panorama/images/spellicons/pudge_rot_png.vtex_c',
+  ], 'the persona names only the minimap one; the game has the same name for the other two');
 });

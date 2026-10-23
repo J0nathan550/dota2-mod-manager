@@ -97,8 +97,16 @@ export function itemAssets(text: string, visuals: string, heroes: string[]): Ite
   const activities = [...new Set(typed('activity', 'modifier').map((f) => f.get('modifier')!))];
   const stock = stockModelsOf(text, heroes);
   const models = typed('entity_model', 'asset', 'modifier').filter((f) => heroes.includes(f.get('asset')!.toLowerCase()));
-  const pictures = Object.entries(PICTURES).flatMap(([type, folders]) => typed(type, 'asset', 'modifier')
-    .flatMap((f) => folders.map((folder) => ({ from: picture(folder, f.get('modifier')!), to: picture(folder, f.get('asset')!), optional: true }))));
+  const swapped = (type: string, folders: string[]) => typed(type, 'asset', 'modifier')
+    .flatMap((f) => folders.map((folder) => ({ from: picture(folder, f.get('modifier')!), to: picture(folder, f.get('asset')!), optional: true })));
+  const pictures = Object.entries(PICTURES).flatMap(([type, folders]) => swapped(type, folders));
+  // A persona names its picture for the minimap alone, and the game shows the plain hero in the top
+  // bar and the hero picker without the item that switches it; the game has the persona's for both,
+  // under the same name (npc_dota_hero_antimage_persona1, npc_dota_hero_oracle_carnival). The
+  // Disciple's Path came out with the plain Anti-Mage's face (J0nathan550, 2026-10-23).
+  if (typed('persona').length && !typed('icon_replacement_hero', 'asset', 'modifier').length) {
+    pictures.push(...swapped('icon_replacement_hero_minimap', PICTURES.icon_replacement_hero));
+  }
   return {
     assetCopies: [
       ...models.map((f) => ({ from: f.get('modifier')!, hero: f.get('asset')!.toLowerCase(), activities })),
