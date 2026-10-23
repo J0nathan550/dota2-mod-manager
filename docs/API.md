@@ -285,10 +285,8 @@ files do with the gem's colour. The base has no gem to read: it was compiled wit
 colour, Reflection's Shade, written in. So here it is that colour that moves:
 - a particle's written colours move as far as the gem's colour moves to the chosen one (shade
   with `from`), so the base in red is the base as it was made;
-- a particle that puts the gem's colour on control point 15 itself has the chosen colour put
-  there too: what reads that point is then in it (particleInColor). The base held 120 particles,
-  94 of them so, until 2026-10-23; it is models and materials now, and the arcana's particles
-  are the game's, baked in a colour (createColoredBases);
+- a particle that puts the gem's colour on control point 15 itself, as 94 of the base's 120 do,
+  has the chosen colour put there too: what reads that point is then in it (particleInColor);
 - a material that read `$GemColor` has the colour as a constant expression in its place, the
   numbers as somebody typed them in the tools (0.235 for 60/255): one near the gem's colour
   becomes the chosen one, any other constant stays.
@@ -356,27 +354,17 @@ The colour the arcana window has Terrorblade in, while its record is on; null ot
 export function createColoredBases(log: (msg: string) => void = () => {})
 ```
 
-Terrorblade's arcana as the builder puts it on, in a colour: the arcana window's while its
-record is on, and the gem's own, Reflection's Shade, while it is not. The last one made of each
-is kept: the recolour parses every particle, and the table is built again on every pick.
-
-The bases hold models and their materials alone (J0nathan550, 2026-10-23), so the arcana's
-particles are the game's, which take their colour from the gem at run time; the builder's hero
-has no gem, and they are baked in a colour here as the window bakes its own (src/arcana.ts):
-- the base: its materials moved to the colour (baseInColor), and the arcana's folder of
-  particles, out of pak01, in it as well, under their own paths;
-- a pick of the arcana's set (`pick`): the arcana's particles it copies under the plain hero's
-  paths, from items_game's swaps.
-Without pak01 and without a colour the base is as it was made.
+The builder's bases with Terrorblade's in a colour, the last one made kept: the recolour parses
+every particle of the base, and the table is built again on every pick. Kept by what the files
+say, since the store reads them off the disk anew each time and a new version keeps the paths.
 
 ## src/arcana-base-store.ts
 
 The arcana bases (src/arcana-bases.ts) brought down from their repository and kept here, so a
 build reads them from disk like it reads pak01.
 
-The repository holds each base as its compiled models and their materials under src/<id>/;
-everything else an arcana needs comes from the game through items_game. A VPK left beside them,
-as each base had until 2026-10-23, is never taken. What is there is read from
+The repository holds each base as its compiled files under src/<id>/, and a VPK of the same
+files beside them for people to try by hand; the app takes the files. What is there is read from
 the repository's git tree, which names every file with git's hash of it: nothing to keep in step
 by hand, and each file is checked against its hash, so a mirror (src/net.ts) can be trusted with
 the bytes. The tree comes from api.github.com, which has no mirrors; where it cannot be reached a
@@ -422,7 +410,7 @@ git's hash of a file: what the repository's tree names it by.
 export function safeListing(raw: unknown): Listing
 ```
 
-Only what a base can be out of a list: a file under models/ or materials/, named by
+Only what a base can be out of a list: a file under models/, materials/ or particles/, named by
 a git hash. The list can come from a mirror (the manifest), and a mirror that served a list of
 its own and the bytes to match it could otherwise have put a file at any path of the user's
 game pak, a script among them; and a hash is a file name here, so it has to be one.
@@ -466,12 +454,10 @@ own look, for the item builder (src/schema-service.ts) and the arcana window (sr
 
 The builder's arcana is Valve's model under the plain hero's path, and the pass through every
 arcana (src/arcana-notes.ts) found a dozen that do not survive it: Razor walks backwards, Pudge's
-back is torn, Juggernaut has one run. J0nathan550 compiled the models of each of those again,
-body, animations and materials, with every file at the path the plain hero reads, and published
-them in a repository of their own (src/arcana-base-store.ts brings them down). The rest of the
-arcana, its particles, sounds and pictures, is the game's, through items_game as for any pick:
-the bases kept their particles too until 2026-10-23. This file says which base a pick puts on and
-how its files share the hero with the user's other picks.
+back is torn, Juggernaut has one run. J0nathan550 compiled each of those again, body, animations,
+particles and materials, with every file at the path the plain hero reads, and published them in
+a repository of their own (src/arcana-base-store.ts brings them down). This file says which base
+a pick puts on and how its files share the hero with the user's other picks.
 
 A base is the whole arcana set made the hero's default look: the body at the hero's model path,
 and each of the set's parts at the path of the stock item of its slot (Razor's
@@ -3589,8 +3575,8 @@ each slot of a persona on with nothing picked wears the game's own item for it.
 export function personaAssets(rec: BuildRecord, assets: VpkEntry[], ready: ReadyBase[]): VpkEntry[]
 ```
 
-A persona slot's files over the persona's base. The base wins wherever it has a file, a model
-rebuilt to fit the body, except at the slot's own model: there a pick wins, and the
+A persona slot's files over the persona's base. The base wins wherever it has a file, its
+particles rebuilt to fit the body, except at the slot's own model: there a pick wins, and the
 game's own item wins over an empty model but not over one rebuilt by hand (Mirana's mount).
 
 ## src/item-builder-slots.ts

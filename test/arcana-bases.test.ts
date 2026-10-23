@@ -17,7 +17,7 @@ import { constantExpression, constantOf, materialExpressions } from '../src/mate
 import { shade, type Rgb } from '../src/recolor.ts';
 import { itemNote } from '../src/arcana-notes.ts';
 import * as schema from '../src/schema.ts';
-import { buildVpk, entryAt, entryPath, readVpkEntryFile } from '../src/vpk.ts';
+import { entryAt, entryPath, readVpkEntryFile } from '../src/vpk.ts';
 import { at, encodeKv3, kv3Block, particle, range, remap, resource } from './helpers/kv3-build.ts';
 import { readKv3 } from '../src/kv3.ts';
 import { dataBlock } from '../src/resource.ts';
@@ -166,7 +166,7 @@ test("the builder's Terrorblade base is in the arcana window's colour while the 
   const tb = ARCANA_BASES.find((b) => b.id === 'fractal_horns_of_inner_abysm')!;
   const jugg = ARCANA_BASES.find((b) => b.id === 'bladeform_legacy')!;
   const files = () => [entryAt(glow, particle(kv3Block([255, 60, 40, 255])))];
-  const colored = createColoredBases().bases;
+  const colored = createColoredBases();
   const [t, j] = colored([readyBase(tb, files()), readyBase(jugg, files())], blue);
   assert.notDeepEqual(t.entries[0].data, files()[0].data, "Terrorblade's moves");
   assert.deepEqual(t.paths, new Set([glow]), 'at the same paths, so every other pick still wins over it');
@@ -174,30 +174,4 @@ test("the builder's Terrorblade base is in the arcana window's colour while the 
   assert.equal(colored([readyBase(tb, files())], blue)[0].entries, t.entries, 'the same files in the same colour: made once');
   const asMade = readyBase(tb, files());
   assert.equal(colored([asMade], null)[0], asMade, 'no colour: untouched');
-});
-
-test("with bases of models alone, Terrorblade's particles are the game's, baked in the window's colour or his own", (t: TestContext) => {
-  const blue: Rgb = [40, 120, 255];
-  const tb = ARCANA_BASES.find((b) => b.id === 'fractal_horns_of_inner_abysm')!;
-  const red = () => particle(kv3Block([255, 60, 40, 255]));
-  const own = 'particles/econ/items/terrorblade/terrorblade_horns_arcana/horns_glow.vpcf_c';
-  const plain = 'particles/units/heroes/hero_terrorblade/terrorblade_reflection.vpcf_c';
-  const game = fs.mkdtempSync(path.join(os.tmpdir(), 'd2mm-tb-'));
-  t.after(() => fs.rmSync(game, { recursive: true, force: true }));
-  const pak01 = path.join(game, 'pak01_dir.vpk');
-  fs.writeFileSync(pak01, buildVpk([entryAt(own, red()), entryAt(plain, red())]));
-
-  const colors = createColoredBases();
-  const model = entryAt('models/heroes/terrorblade/terrorblade_arcana.vmdl_c', Buffer.from('the body'));
-  const [base] = colors.bases([readyBase(tb, [model])], blue, pak01);
-  assert.deepEqual([...base.paths].sort(), [model, entryAt(own, Buffer.alloc(0))].map(entryPath).sort(),
-    "the arcana's own folder joins the base; the plain hero's particle is the pick's to fill");
-  assert.notDeepEqual(base.entries.find((e) => entryPath(e) === own)!.data, red(), 'in the window\'s colour');
-  assert.equal(colors.bases([readyBase(tb, [model])], null, pak01)[0].paths.has(own), true, 'no window: still baked, in his own colour');
-
-  const picked = [entryAt(plain, red()), model];
-  const inBlue = colors.pick(picked, blue);
-  assert.notDeepEqual(inBlue[0].data, red(), "the pick's particle under the plain path takes the colour");
-  assert.equal(inBlue[1], model, 'a model is not a particle');
-  assert.equal(colors.pick(picked, blue), inBlue, 'made once for the same files and colour');
 });

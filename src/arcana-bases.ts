@@ -4,12 +4,10 @@
  *
  * The builder's arcana is Valve's model under the plain hero's path, and the pass through every
  * arcana (src/arcana-notes.ts) found a dozen that do not survive it: Razor walks backwards, Pudge's
- * back is torn, Juggernaut has one run. J0nathan550 compiled the models of each of those again,
- * body, animations and materials, with every file at the path the plain hero reads, and published
- * them in a repository of their own (src/arcana-base-store.ts brings them down). The rest of the
- * arcana, its particles, sounds and pictures, is the game's, through items_game as for any pick:
- * the bases kept their particles too until 2026-10-23. This file says which base a pick puts on and
- * how its files share the hero with the user's other picks.
+ * back is torn, Juggernaut has one run. J0nathan550 compiled each of those again, body, animations,
+ * particles and materials, with every file at the path the plain hero reads, and published them in
+ * a repository of their own (src/arcana-base-store.ts brings them down). This file says which base
+ * a pick puts on and how its files share the hero with the user's other picks.
  *
  * A base is the whole arcana set made the hero's default look: the body at the hero's model path,
  * and each of the set's parts at the path of the stock item of its slot (Razor's

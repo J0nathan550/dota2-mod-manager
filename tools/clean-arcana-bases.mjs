@@ -1,15 +1,14 @@
 /* Strips a compiled arcana base (game/dota_addons/<name>) down to what the base is for: the
-   hero's models with their animations, and the materials and textures of those models.
+   hero's models with their animations, its materials and textures, and its particles.
 
-   Everything else comes from the game when the app puts the arcana on, through items_game
-   (src/arcana-base-store.ts takes nothing else): its particles, sounds, pictures and the swaps
-   between them, which items_game names and the app reads out of pak01. The rest is the editor's own
-   bookkeeping (tools_thumbnail_cache, tools_asset_info). Until 2026-10-23 a base kept its
-   particles as well; J0nathan550 keeps the bases to the models, so they follow the game's updates.
+   Everything else is either the editor's own bookkeeping (tools_thumbnail_cache, tools_asset_info),
+   something the app already writes for every pick at once (soundevents, which src/item-sounds.ts
+   merges; panorama pictures, which it copies out of pak01), or a particle every hero in the match
+   uses (Blink Dagger, stuns, item effects, the engine's error particle), which the game already
+   switches for the arcana's owner and a mod would switch for everyone.
 
-   A material that belongs to a particle (materials/<anything>/particles/...) goes with the
-   particles. Models are kept whoever they belong to: Rubick's arcana reshapes Lycan's wolf,
-   Undying's golem and Pangolier's ball for when he steals them, and those are wanted.
+   Models are kept whoever they belong to: Rubick's arcana reshapes Lycan's wolf, Undying's golem
+   and Pangolier's ball for when he steals them, and those are wanted.
 
    Usage: node tools/clean-arcana-bases.mjs [--root <game/dota_addons>] [--apply] [name...]
      With no names, every addon without an addoninfo.txt (Valve's own all have one).
@@ -21,11 +20,17 @@ import path from 'node:path';
 
 const DEFAULT_ROOT = 'D:/SteamLibrary/steamapps/common/dota 2 beta/game/dota_addons';
 
+const KEPT_ROOTS = ['models/', 'materials/', 'particles/'];
+
+// particles every hero uses: items_fx..items5_fx, generic stuns and buffs, the error particle,
+// and the placeholders item modifiers draw at
+const SHARED_PARTICLES = /^particles\/(items\d*_fx|generic_gameplay|error|ability_modifier_placeholder)\//;
+
 /** Why a file goes, or null when it stays. `rel` is lower case with forward slashes. */
 function reasonToRemove(rel) {
-  if (rel.startsWith('models/')) return null;
-  if (rel.startsWith('materials/')) return /\/particles\//.test(rel) ? 'particle material' : null;
-  return rel.split('/')[0];
+  if (!KEPT_ROOTS.some((r) => rel.startsWith(r))) return rel.split('/')[0];
+  if (SHARED_PARTICLES.test(rel)) return 'shared particle';
+  return null;
 }
 
 function walk(dir, base = dir, out = []) {
@@ -70,6 +75,7 @@ function main(argv) {
     for (const f of gone) byWhy.set(f.why, (byWhy.get(f.why) || 0) + 1);
     console.log(`${name}: ${files.length - gone.length} kept, ${gone.length} out`
       + (gone.length ? ` (${[...byWhy].map(([w, n]) => `${w} ${n}`).join(', ')})` : ''));
+    for (const f of gone.filter((g) => g.why === 'shared particle')) console.log(`    ${f.rel}`);
     if (apply) {
       for (const f of gone) {
         const to = path.join(trash, name, f.rel);
