@@ -226,8 +226,8 @@ const emptyAt = (base: ReadyBase, path: string) => {
 };
 
 /**
- * A persona slot's files over the persona's base. The base wins wherever it has a file, its
- * particles rebuilt to fit the body, except at the slot's own model: there a pick wins, and the
+ * A persona slot's files over the persona's base. The base wins wherever it has a file, a model
+ * rebuilt to fit the body, except at the slot's own model: there a pick wins, and the
  * game's own item wins over an empty model but not over one rebuilt by hand (Mirana's mount).
  */
 export function personaAssets(rec: BuildRecord, assets: VpkEntry[], ready: ReadyBase[]): VpkEntry[] {

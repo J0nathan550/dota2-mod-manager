@@ -569,8 +569,8 @@ that location is not writable.
 | `src/item-builder-assets.ts` | What a pick needs beyond its block: the game's files under the plain paths (models, particles, an arcana's hero model, the hero's portrait, minimap and ability pictures) and the sounds, voice, portrait settings and minimap sprite it switches |
 | `src/arcana-notes.ts` | What each arcana does in the game once the builder puts it on, from a pass through every one: a note with its problems, or that it is broken or not checked, which the slot window shows on the item |
 | `src/arcana-bases.ts` | The arcana bases, each arcana compiled again by hand so it works as the hero's own look: which base a pick puts on, by item, style and what is worn with it, and the rule that every other pick wins over the base where both write a path, the arcana's own parts excepted |
-| `src/arcana-base-store.ts` | The bases brought down from their repository (J0nathan550/d2pfx-arcana-fixes) and kept in userData: listed from its git tree, each file checked against its git hash, a base used only once all of it is here, and the build asked to run again when one comes |
-| `src/arcana-base-color.ts` | Terrorblade's base in the arcana window's colour: the gem's colour written into its particles and materials moved to the chosen one, for the window's mod and for the builder's copy while the window's record is on |
+| `src/arcana-base-store.ts` | The bases brought down from their repository (J0nathan550/d2pfx-arcana-fixes) and kept in userData: models and their materials only, listed from its git tree, each file checked against its git hash, a base used only once all of it is here, and the build asked to run again when one comes |
+| `src/arcana-base-color.ts` | Terrorblade's base in the arcana window's colour: the gem's colour written into its materials moved to the chosen one, and for the builder the game's particles of the arcana baked in that colour, or in his own while the window's record is off |
 | `src/item-portraits.ts` | A hero's HUD portrait camera and lights (`scripts/npc/portraits.txt`) and minimap sprite (`scripts/mod_textures.txt`) as the picks make them, every pick's in one copy of each file |
 | `src/item-sounds.ts` | An item's sounds and an arcana's voice, which the server gives only to the item's owner: the plain sound events rewritten as the item's in the game's soundevents files, every pick's in one copy of each |
 | `src/notice-text.ts`, `src/notice-texts.ts` | The game's anti-cheat notice in words that say what to do, in every language Dota ships |
@@ -602,8 +602,7 @@ that location is not writable.
 | `tools/gen-fingerprints.js` | Regenerating the published fingerprint map, and `mod-paths.json`, the files each pak mod replaces |
 | `tools/dota-diff.mjs`, `tools/dota-watch.mjs` | What a Dota build changed, read from GameTracking-Dota2: by hand with `npm run dota:diff`, and twice an hour in the "Dota updates" issue |
 | `tools/recolor.mjs` | `npm run recolor`: the recolour, or with `--arcana` the whole arcana, as a VPK to import, before the window offers it |
-| `tools/clean-arcana-bases.mjs` | A compiled arcana base stripped to models, materials and particles, the editor's files, sounds, pictures and particles every hero shares moved aside |
-| `tools/pack-arcana-vpks.mjs` | Every base in a folder packed into a VPK with VPKTool, one at a time, each checked against the files it was made from |
+| `tools/clean-arcana-bases.mjs` | A compiled arcana base stripped to its models and their materials, everything the game gives through items_game (particles, sounds, pictures) and the editor's files moved aside |
 | `tools/arcana-bases-manifest.mjs` | manifest.json for the bases' repository, the list of files and hashes the app falls back on where api.github.com cannot be reached |
 | `tools/item-plan.mjs` | `npm run item-plan -- <item>`: `src/item-visuals.ts` from the command line, the first step of building an item as a mod |
 | `tools/mod-doctor.mjs` | `npm run doctor -- <mod_dir.vpk>`: `src/mod-doctor.ts` from the command line, against the game folder in the app's settings |

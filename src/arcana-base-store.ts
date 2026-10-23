@@ -2,8 +2,9 @@
  * The arcana bases (src/arcana-bases.ts) brought down from their repository and kept here, so a
  * build reads them from disk like it reads pak01.
  *
- * The repository holds each base as its compiled files under src/<id>/, and a VPK of the same
- * files beside them for people to try by hand; the app takes the files. What is there is read from
+ * The repository holds each base as its compiled models and their materials under src/<id>/;
+ * everything else an arcana needs comes from the game through items_game. A VPK left beside them,
+ * as each base had until 2026-10-23, is never taken. What is there is read from
  * the repository's git tree, which names every file with git's hash of it: nothing to keep in step
  * by hand, and each file is checked against its hash, so a mirror (src/net.ts) can be trusted with
  * the bytes. The tree comes from api.github.com, which has no mirrors; where it cannot be reached a
@@ -44,11 +45,15 @@ export const blobSha = (data: Buffer) => crypto.createHash('sha1').update(`blob 
 
 const SHA = /^[0-9a-f]{40}$/;
 const BASE_ID = /^[a-z0-9_]+$/i;
-/** what a base holds: the hero's models, materials and particles (tools/clean-arcana-bases.mjs) */
-const BASE_FILE = /^(models|materials|particles)\/[^\\:]+$/i;
+/**
+ * what a base holds: the hero's models and their materials (tools/clean-arcana-bases.mjs). The
+ * particles went on 2026-10-23: J0nathan550 keeps the bases to the models, and the arcana's own
+ * particles are the game's, swapped in by items_game like any other pick's.
+ */
+const BASE_FILE = /^(models|materials)\/[^\\:]+$/i;
 
 /**
- * Only what a base can be out of a list: a file under models/, materials/ or particles/, named by
+ * Only what a base can be out of a list: a file under models/ or materials/, named by
  * a git hash. The list can come from a mirror (the manifest), and a mirror that served a list of
  * its own and the bytes to match it could otherwise have put a file at any path of the user's
  * game pak, a script among them; and a hash is a file name here, so it has to be one.

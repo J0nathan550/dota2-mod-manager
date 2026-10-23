@@ -47,7 +47,7 @@ function store(t: TestContext, r: ReturnType<typeof repo>, dir = fs.mkdtempSync(
 
 const JUGG = {
   'src/bladeform_legacy/models/heroes/juggernaut/juggernaut.vmdl_c': 'body',
-  'src/bladeform_legacy/particles/econ/items/juggernaut/Blade Fury.vpcf_c': 'fury',
+  'src/bladeform_legacy/materials/models/heroes/juggernaut/Blade Fury.vmat_c': 'fury',
   'src/bladeform_legacy/pak29_dir.vpk': 'the same files packed',
   'README.md': 'not a base',
 };
@@ -56,7 +56,7 @@ test("the tree lists each base's files with their hash, and not the VPK of them"
   const r = repo(JUGG);
   const listing = listingFromTree(r.tree());
   assert.deepEqual(Object.keys(listing), ['bladeform_legacy']);
-  assert.deepEqual(Object.keys(listing.bladeform_legacy).sort(), ['models/heroes/juggernaut/juggernaut.vmdl_c', 'particles/econ/items/juggernaut/Blade Fury.vpcf_c']);
+  assert.deepEqual(Object.keys(listing.bladeform_legacy).sort(), ['materials/models/heroes/juggernaut/Blade Fury.vmat_c', 'models/heroes/juggernaut/juggernaut.vmdl_c']);
   assert.equal(listing.bladeform_legacy['models/heroes/juggernaut/juggernaut.vmdl_c'], blobSha(Buffer.from('body')));
 });
 
@@ -67,9 +67,9 @@ test('a base asked for comes down whole, is said to be ready once, and a build g
   assert.equal(await s.want('bladeform_legacy'), true);
   assert.deepEqual(ready, ['bladeform_legacy']);
   const entries = s.entries('bladeform_legacy')!;
-  assert.deepEqual(entries.map(entryPath).sort(), ['models/heroes/juggernaut/juggernaut.vmdl_c', 'particles/econ/items/juggernaut/blade fury.vpcf_c']);
+  assert.deepEqual(entries.map(entryPath).sort(), ['materials/models/heroes/juggernaut/blade fury.vmat_c', 'models/heroes/juggernaut/juggernaut.vmdl_c']);
   assert.equal(entries.find((e) => e.name === 'juggernaut')!.data.toString(), 'body');
-  assert.ok(r.asked.some((u) => u.endsWith('/Blade%20Fury.vpcf_c')), 'a name with a space is asked for as a URL');
+  assert.ok(r.asked.some((u) => u.endsWith('/Blade%20Fury.vmat_c')), 'a name with a space is asked for as a URL');
   assert.ok(!r.asked.some((u) => u.endsWith('.vpk')), 'the VPK is never brought down');
   const before = r.asked.length;
   assert.equal(await s.want('bladeform_legacy'), true, 'asked again in the same run: the same answer');
@@ -166,18 +166,20 @@ test('a base the repository does not have is said so, and nothing is kept', asyn
   assert.ok(said.some((m) => /has no base feast_of_abscession/.test(m)));
 });
 
-test("a list can only name a base's models, materials and particles, each by a git hash", async (t) => {
+test("a list can only name a base's models and their materials, each by a git hash", async (t) => {
   const sha = blobSha(Buffer.from('x'));
   assert.deepEqual(safeListing({
     planetfall: {
       'models/heroes/earthshaker/earthshaker.vmdl_c': sha,
+      'materials/models/heroes/earthshaker/totem.vmat_c': sha,
+      'particles/units/heroes/hero_earthshaker/fissure.vpcf_c': sha, // the game's, through items_game
       'scripts/npc/npc_heroes.txt': sha,
       'particles/../scripts/vscripts/addon_game_mode.vjs_c': sha,
       'materials/x.vmat_c': '../../../ready.json',
       'particles/fine.vpcf_c': 'ABC',
     },
     '../escape': { 'models/a.vmdl_c': sha },
-  }), { planetfall: { 'models/heroes/earthshaker/earthshaker.vmdl_c': sha } });
+  }), { planetfall: { 'models/heroes/earthshaker/earthshaker.vmdl_c': sha, 'materials/models/heroes/earthshaker/totem.vmat_c': sha } });
   // a mirror's manifest naming a script, with the bytes to match its own hash: the script never comes
   const script = 'local x = 1';
   const fetchUrl = async (url: string) => {

@@ -7,8 +7,10 @@
  * colour, Reflection's Shade, written in. So here it is that colour that moves:
  * - a particle's written colours move as far as the gem's colour moves to the chosen one (shade
  *   with `from`), so the base in red is the base as it was made;
- * - a particle that puts the gem's colour on control point 15 itself, as 94 of the base's 120 do,
- *   has the chosen colour put there too: what reads that point is then in it (particleInColor);
+ * - a particle that puts the gem's colour on control point 15 itself has the chosen colour put
+ *   there too: what reads that point is then in it (particleInColor). The base held 120 particles,
+ *   94 of them so, until 2026-10-23; it is models and materials now, and the arcana's particles
+ *   are the game's, baked in a colour (createColoredBases);
  * - a material that read `$GemColor` has the colour as a constant expression in its place, the
  *   numbers as somebody typed them in the tools (0.235 for 60/255): one near the gem's colour
  *   becomes the chosen one, any other constant stays.
@@ -24,9 +26,9 @@ import crypto from 'node:crypto';
 import { RECOLOR_SETS, recolorResource, shade, shadeColors, type Rgb } from './recolor.ts';
 import { numberOf, readKv3, writeCell, type Kv3Block, type Kv3Node } from './kv3.ts';
 import { dataBlock } from './resource.ts';
-import { TERRORBLADE_BASE, type ReadyBase } from './arcana-bases.ts';
+import { TERRORBLADE_BASE, readyBase, type ReadyBase } from './arcana-bases.ts';
 import { constantExpression, constantOf, rewriteExpressions } from './material.ts';
-import { entryAt, entryPath, type VpkEntry } from './vpk.ts';
+import { entryAt, entryPath, sharedVpkIndex, type VpkEntry } from './vpk.ts';
 
 /** how far a typed-in channel may be from the gem's and still be the gem's: 0.235 against 0.2353 */
 const NEAR = 0.01;
@@ -123,23 +125,80 @@ export function windowColor(records: { enabled?: boolean; generated?: unknown }[
   return Array.isArray(color) && color.length === 3 && color.every((n) => Number.isInteger(n) && n >= 0 && n <= 255) ? color as Rgb : null;
 }
 
+const sha = (entries: VpkEntry[]) => {
+  const hash = crypto.createHash('sha1');
+  for (const e of entries) hash.update(entryPath(e)).update(e.data);
+  return hash.digest('hex');
+};
+
+/** Particles of the game's in a colour, baked: the builder's hero has no gem to tint them (src/recolor.ts). */
+function particlesInColor(entries: VpkEntry[], target: Rgb, failed: string[]): VpkEntry[] {
+  const { gem } = RECOLOR_SETS[WINDOW_SET];
+  return entries.map((e) => {
+    const p = entryPath(e);
+    if (!p.endsWith('.vpcf_c')) return e;
+    try {
+      return entryAt(p, recolorResource(e.data, target, { gem, own: true, bake: true }).file);
+    } catch {
+      failed.push(p);
+      return e;
+    }
+  });
+}
+
+/** The arcana's own particles, its folder of them, out of the game's pak01. */
+function ownParticles(pak01: string): VpkEntry[] {
+  const index = sharedVpkIndex(pak01);
+  const own = RECOLOR_SETS[WINDOW_SET].own;
+  return [...index.paths()].filter((p) => p.endsWith('.vpcf_c') && own.some((o) => p.startsWith(o)))
+    .flatMap((p) => { const data = index.read(p); return data ? [entryAt(p, data)] : []; });
+}
+
 /**
- * The builder's bases with Terrorblade's in a colour, the last one made kept: the recolour parses
- * every particle of the base, and the table is built again on every pick. Kept by what the files
- * say, since the store reads them off the disk anew each time and a new version keeps the paths.
+ * Terrorblade's arcana as the builder puts it on, in a colour: the arcana window's while its
+ * record is on, and the gem's own, Reflection's Shade, while it is not. The last one made of each
+ * is kept: the recolour parses every particle, and the table is built again on every pick.
+ *
+ * The bases hold models and their materials alone (J0nathan550, 2026-10-23), so the arcana's
+ * particles are the game's, which take their colour from the gem at run time; the builder's hero
+ * has no gem, and they are baked in a colour here as the window bakes its own (src/arcana.ts):
+ * - the base: its materials moved to the colour (baseInColor), and the arcana's folder of
+ *   particles, out of pak01, in it as well, under their own paths;
+ * - a pick of the arcana's set (`pick`): the arcana's particles it copies under the plain hero's
+ *   paths, from items_game's swaps.
+ * Without pak01 and without a colour the base is as it was made.
  */
 export function createColoredBases(log: (msg: string) => void = () => {}) {
   let kept: { key: string; entries: VpkEntry[] } | null = null;
-  return (ready: ReadyBase[], color: Rgb | null): ReadyBase[] => ready.map((r) => {
-    if (!color || r.base.id !== TERRORBLADE_BASE) return r;
-    const hash = crypto.createHash('sha1');
-    for (const e of r.entries) hash.update(entryPath(e)).update(e.data);
-    const key = `${hash.digest('hex')}|${color.join(',')}`;
-    if (kept?.key !== key) {
-      const colored = baseInColor(r.entries, color, RECOLOR_SETS[WINDOW_SET].gem);
-      if (colored.failed.length) log(`schema: ${colored.failed.length} files of ${r.base.id} kept their own colour, first ${colored.failed[0]}`);
-      kept = { key, entries: colored.entries };
-    }
-    return { ...r, entries: kept.entries };
-  });
+  let keptPick: { key: string; entries: VpkEntry[] } | null = null;
+  const said = (what: string, failed: string[]) => {
+    if (failed.length) log(`schema: ${failed.length} files of ${what} kept their own colour, first ${failed[0]}`);
+  };
+  return {
+    bases: (ready: ReadyBase[], color: Rgb | null, pak01: string | null = null): ReadyBase[] => ready.map((r) => {
+      if (r.base.id !== TERRORBLADE_BASE || (!color && !pak01)) return r;
+      const target = color || RECOLOR_SETS[WINDOW_SET].gem;
+      const key = `${sha(r.entries)}|${target.join(',')}|${pak01}`;
+      if (kept?.key !== key) {
+        const failed: string[] = [];
+        const colored = color ? baseInColor(r.entries, color, RECOLOR_SETS[WINDOW_SET].gem) : { entries: r.entries, failed: [] };
+        failed.push(...colored.failed);
+        const have = new Set(colored.entries.map(entryPath));
+        const own = pak01 ? particlesInColor(ownParticles(pak01).filter((e) => !have.has(entryPath(e))), target, failed) : [];
+        said(r.base.id, failed);
+        kept = { key, entries: [...colored.entries, ...own] };
+      }
+      return kept.entries === r.entries ? r : readyBase(r.base, kept.entries);
+    }),
+    pick: (entries: VpkEntry[], color: Rgb | null): VpkEntry[] => {
+      const target = color || RECOLOR_SETS[WINDOW_SET].gem;
+      const key = `${sha(entries)}|${target.join(',')}`;
+      if (keptPick?.key !== key) {
+        const failed: string[] = [];
+        keptPick = { key, entries: particlesInColor(entries, target, failed) };
+        said("Terrorblade's arcana", failed);
+      }
+      return keptPick.entries;
+    },
+  };
 }
