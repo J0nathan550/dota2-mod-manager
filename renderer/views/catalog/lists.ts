@@ -15,6 +15,7 @@ import { tagLabel as labelOfTag, collectSlots as slotsOf } from '../../catalog/t
 import { applyFilters as filterMods, sortMods } from '../../catalog/filters.ts';
 import { isFav } from '../../catalog/favorites.ts';
 import { isInstalled } from '../../catalog/looks.ts';
+import { withPersonas } from '../../catalog/builder/logic.ts';
 import { catalogConstants, catalogData } from '../../catalog/data.ts';
 import type { CosmeticOption, CosmeticSlot, Mod } from '../../catalog/types.ts';
 import { view } from './state.ts';
@@ -105,8 +106,9 @@ export function favoriteMods(): Mod[] {
 
 // Cosmetics only work with the schema patch on, so with safe mode they are not offered
 // anywhere: the rail, the favourites, the search all ask here first.
+/** The free looks and the builder's slots on offer: a hero with a persona on, its persona's alone (catalog/builder/logic.ts withPersonas). */
 export function cosmeticSlotList(): CosmeticSlot[] {
-  return state.settings?.schemaPatch ? (state.cosmeticSlots || []) : [];
+  return state.settings?.schemaPatch ? withPersonas(state.cosmeticSlots || [], pickedIn) : [];
 }
 
 export function slotData(slot: string): CosmeticSlot | null {

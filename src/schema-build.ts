@@ -25,6 +25,7 @@ import { portraitEntries } from './item-portraits.ts';
 import type { ItemAssets, PortraitSwap, SpriteSwap } from './item-builder-assets.ts';
 import { styleOf } from './item-builder-styles.ts';
 import { basesHereSteps, withoutBaseFiles, type ReadyBase } from './arcana-bases.ts';
+import { isSelectorSlot, leftOut, personaAssets, personaRecords, personasOn, type BuildRecord } from './item-builder-personas.ts';
 import { createColoredBases, windowColor } from './arcana-base-color.ts';
 import type { BaseStore } from './arcana-base-store.ts';
 import { sharedVpkIndexSteps, type VpkEntry } from './vpk.ts';
@@ -37,6 +38,8 @@ type ItemPick = { id: string; block: string; assets: VpkEntry[] } & ItemAssets;
 
 /** How far a build is: the picks built anew so far out of those it has to, or the stage of the write. */
 export type BuildStep = { done: number; total: number } | { stage: 'merged' | 'checked' | 'packed' };
+export { buildBar } from './build-bar.ts';
+
 /** What a build yields: a step the bar counts, a pause in a long walk, or the pak to write (schema.deploySteps). */
 export type BuildYield = BuildStep | schema.DeployStep;
 
@@ -54,33 +57,6 @@ export interface Refreshed {
   superseded?: boolean;
 }
 
-
-/**
- * The bar at the bottom of the window for a build in the background: shown once the build has run
- * for `after` ms, so a pick that takes a fifth of a second does not flash it, and counted in the
- * picks built anew. A build with none to build, the merge and the write alone, shows nothing.
- */
-export function buildBar(send: (evt: { type: 'count'; label: string; done: number; total: number } | { type: 'done' }) => void,
-  label: () => string, after = 400, now = () => Date.now()): (step: BuildStep | null) => void {
-  let started: number | null = null;
-  let shown = false;
-  let picks = { done: 0, total: 0 };
-  return (step) => {
-    if (!step) {
-      if (shown) send({ type: 'done' });
-      started = null;
-      shown = false;
-      picks = { done: 0, total: 0 };
-      return;
-    }
-    started ??= now();
-    // the stages of the write come after every pick: the count stays full while they run
-    picks = 'total' in step ? step : { done: picks.total, total: picks.total };
-    if (!picks.total || (!shown && now() - started < after)) return;
-    shown = true;
-    send({ type: 'count', label: label(), ...picks });
-  };
-}
 
 /** Which files a base fills, as a short name: a new version of a base builds its own parts again. */
 const signatures = new WeakMap<ReadyBase, string>();
@@ -107,14 +83,14 @@ export function createTableBuild({ library, bases, log }: {
   /* A pick by item and effects, and by the base of its own arcana set when one is here: that base
    * fills some of the pick's paths, which the pick then does not build (gameAssetEntries skip). */
   const ownBase = (rec: LibRecord, ready: ReadyBase[]) => ready.find((r) => r.base.parts.includes(String(rec.itemId)));
-  const pickKey = (rec: LibRecord, ready: ReadyBase[]) => {
+  const pickKey = (rec: BuildRecord, ready: ReadyBase[]) => {
     const own = ownBase(rec, ready);
-    return `${rec.itemId}|${itemBuilder.effectKey(rec.effectId)}${own ? `|${own.base.id}:${baseSignature(own)}` : ''}`;
+    return `${rec.itemId}|${itemBuilder.effectKey(rec.effectId)}${own ? `|${own.base.id}:${baseSignature(own)}` : ''}${rec.persona ? `@${rec.persona.target}` : ''}`;
   };
-  function builtPick(vanillaText: string, game: string, key: string, rec: LibRecord, own: ReadyBase | undefined): ItemPick {
+  function builtPick(vanillaText: string, game: string, key: string, rec: BuildRecord, own: ReadyBase | undefined): ItemPick {
     let pick = built.get(key);
     if (!pick) {
-      const made = itemBuilder.itemEffectPatch(vanillaText, String(rec.itemId), rec.effectId);
+      const made = itemBuilder.itemEffectPatch(vanillaText, String(rec.itemId), rec.effectId, rec.persona?.target);
       pick = { ...made, assets: itemBuilder.gameAssetEntries(game, made.assetCopies, own && ((p) => own.paths.has(p))) };
       built.set(key, pick);
     }
@@ -129,9 +105,13 @@ export function createTableBuild({ library, bases, log }: {
     return entries;
   }
 
-  // the item builder's enabled picks, for which arcana bases they put on (src/arcana-bases.ts)
-  const picks = () => library.list().filter((r) => r.enabled !== false && isItemPick(r))
-    .map((r) => ({ itemId: String(r.itemId), style: styleOf(itemBuilder.effectKey(r.effectId)) }));
+  // the item builder's enabled picks, for which arcana bases they put on (src/arcana-bases.ts): not
+  // a plain one of a hero with a persona on, which the build leaves out (src/item-builder-personas.ts)
+  const picks = () => {
+    const on = library.list().filter((r) => r.enabled !== false && isItemPick(r));
+    const personas = personasOn(on);
+    return on.filter((r) => !leftOut(r, personas)).map((r) => ({ itemId: String(r.itemId), style: styleOf(itemBuilder.effectKey(r.effectId)) }));
+  };
 
   /**
    * Enabled mods' lifted item blocks + the free cosmetics the user picked, a step for each pick
@@ -154,8 +134,10 @@ export function createTableBuild({ library, bases, log }: {
     const voices: VoiceCue[] = [];
     const portraits: PortraitSwap[] = [];
     const sprites: SpriteSwap[] = [];
-    // a copy: a build in the background goes on while the user changes the library
-    const records = library.list().filter((r) => r.enabled !== false);
+    // a copy: a build in the background goes on while the user changes the library; with each
+    // persona's own items in, and what cannot be worn with it out (src/item-builder-personas.ts)
+    const { records, left } = personaRecords(library.list().filter((r) => r.enabled !== false), vanillaText);
+    for (const { rec, why } of left) log(`schema: ${rec.name} left out of the build: ${why}`);
     const total = records.filter((r) => isItemPick(r) && !built.has(pickKey(r, ready))).length;
     const pak = path.join(game, 'dota', 'pak01_dir.vpk');
     if (total && fs.existsSync(pak)) yield* sharedVpkIndexSteps(pak);
@@ -168,7 +150,8 @@ export function createTableBuild({ library, bases, log }: {
             const key = pickKey(rec, ready);
             const pick = builtPick(vanillaText, game, key, rec, ownBase(rec, ready));
             used.add(key);
-            const assets = withoutBaseFiles(String(rec.itemId), pick.assets, ready);
+            const assets = rec.persona && !isSelectorSlot(rec.slot)
+              ? personaAssets(rec, pick.assets, ready) : withoutBaseFiles(String(rec.itemId), pick.assets, ready);
             out.push({ id: pick.id, block: pick.block, assets, source: rec.name });
             sounds.push(...pick.sounds);
             voices.push(...pick.voices);

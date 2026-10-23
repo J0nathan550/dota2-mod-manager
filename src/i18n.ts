@@ -218,7 +218,7 @@ const EN = {
   'плечи': 'shoulders', 'шея': 'neck', 'пояс': 'belt', 'руки': 'arms', 'перчатки': 'gloves', 'спина': 'back', 'крылья': 'wings', 'хвост': 'tail',
   'ноги': 'legs', 'ездовое': 'mount', 'костюм': 'costume', 'эффекты': 'effects', 'способность 1': 'ability 1', 'способность 2': 'ability 2',
   'способность 3': 'ability 3', 'способность 4': 'ability 4', 'ультимейт': 'ultimate', 'призыв': 'summon', 'голос': 'voice',
-  'форма': 'shapeshift', 'база героя': 'hero base', 'разное': 'misc', 'модель': 'model',
+  'форма': 'shapeshift', 'база героя': 'hero base', 'разное': 'misc', 'модель': 'model', 'персона': 'persona',
   'перекраска': 'recolor',
   // kind labels (short)
   'варды': 'wards', 'курьер': 'courier', 'интерфейс': 'UI', 'звуки': 'sounds', 'террейн': 'terrain',

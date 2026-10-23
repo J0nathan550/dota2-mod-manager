@@ -60,6 +60,8 @@ export interface CosmeticSlot {
   icon?: string;
   options: CosmeticOption[];
   effects?: { id: string; name: string }[];
+  /** a persona's slot (src/item-builder-personas.ts): `part` false where the persona is picked */
+  persona?: { hero: string; part: boolean };
 }
 
 /** One piece of an item set, and whether the builder can put it on (src/item-builder.ts itemSets). */

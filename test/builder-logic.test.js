@@ -90,3 +90,20 @@ test('a hero\'s card says what is on it rather than how many slots it has', asyn
   assert.equal(heroCardMeta(abaddon, [set], (s) => (s === 'a:back' ? { itemId: '9' } : null)), 'Изменено 1 из 2');
   assert.equal(heroCardMeta(abaddon, [set], (s) => (s === 'a:head' ? { itemId: '1' } : null)), 'Arsenal', 'a worn set is named');
 });
+
+test('a hero with a persona on shows its persona\'s slots alone, and one without its plain slots', async () => {
+  const { withPersonas } = await load();
+  const slots = [
+    { slot: 'item:pudge:weapon', heroIds: ['pudge'], options: [] },
+    { slot: 'item:pudge:persona_selector', heroIds: ['pudge'], options: [], persona: { hero: 'pudge', part: false } },
+    { slot: 'item:pudge:weapon_persona_1', heroIds: ['pudge'], options: [], persona: { hero: 'pudge', part: true } },
+    { slot: 'item:axe:weapon', heroIds: ['axe'], options: [] },
+    { slot: 'weather', options: [] },
+  ];
+  const shown = (picked) => withPersonas(slots, (s) => (picked.includes(s) ? { itemId: '1' } : null)).map((s) => s.slot);
+  assert.deepEqual(shown([]), ['item:pudge:weapon', 'item:pudge:persona_selector', 'item:axe:weapon', 'weather'],
+    'no persona: the plain slots and the one to pick a persona in');
+  assert.deepEqual(shown(['item:pudge:persona_selector']), ['item:pudge:persona_selector', 'item:pudge:weapon_persona_1', 'item:axe:weapon', 'weather'],
+    "the Toy Butcher on: Pudge's plain weapon goes, the persona's comes, other heroes stay");
+  assert.deepEqual(shown(['item:pudge:weapon']), shown([]), 'a plain pick is no persona');
+});

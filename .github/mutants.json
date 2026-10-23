@@ -1038,8 +1038,8 @@
       "name": "a switched-off mod still goes into the item table",
       "file": "src/schema-build.ts",
       "anchor": "  function* buildSteps(vanillaText: string, game: string)",
-      "from": "const records = library.list().filter((r) => r.enabled !== false);",
-      "to": "const records = [...library.list()];",
+      "from": "personaRecords(library.list().filter((r) => r.enabled !== false), vanillaText);",
+      "to": "personaRecords([...library.list()], vanillaText);",
       "test": "test/schema-service.test.ts"
     },
     {

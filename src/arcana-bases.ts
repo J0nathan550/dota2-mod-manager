@@ -34,6 +34,8 @@ export interface ArcanaBase {
   requires?: string[];
   /** the set's items: a pick of one leaves the base's paths to the base */
   parts: string[];
+  /** a persona: the hero wears only its own items while it is on (src/item-builder-personas.ts) */
+  persona?: true;
 }
 
 const JUGGERNAUT = ['9059', '30261', '7592'];
@@ -45,6 +47,20 @@ const SKYWRATH = ['18539', '18540', '18541', '18542', '18543', '18544'];
 const RAZOR = ['23095', '23096', '23097', '23098', '23099'];
 const FACELESS_VOID = ['18033', '22822', '22823', '22824', '22825'];
 const AXE_UNLEASHED = ['12964', '12965', '12966', '12968'];
+/** folder, hero, the persona item */
+const PERSONAS: [string, string, string][] = [
+  ['acolyte_of_the_lost_arts', 'invoker', '13042'],
+  ['axe_automaton_persona', 'axe', '31367'],
+  ['bristleback_automaton_persona', 'bristleback', '36214'],
+  ['conduit_of_the_blueheart', 'crystal_maiden', '19205'],
+  ['davion_of_dragon_hold', 'dragon_knight', '18113'],
+  ['legion_commander_automaton_persona', 'legion_commander', '36191'],
+  ['mirana_of_nightsilver', 'mirana', '18178'],
+  ['morphling_automaton_persona', 'morphling', '36193'],
+  ['oracle_automaton_persona', 'oracle', '31357'],
+  ['the_disciples_path', 'antimage', '13783'],
+  ['the_toy_butcher', 'pudge', '13786'],
+];
 
 /*
  * Rubick's Magus Cypher has 41 styles, colours of its particles, and Crystal Maiden's Frost
@@ -56,6 +72,11 @@ const AXE_UNLEASHED = ['12964', '12965', '12966', '12968'];
  * set's cape, armour and quiver there too, so she wore the arcana's cape whatever was picked, and
  * her second style had a variant for under Mania's Mask (both replaced on 2026-10-23). Axe's Fists
  * of Axe Unleashed is an immortal, not an arcana, but it swaps his whole model the same way.
+ *
+ * A persona's base is its bare body, and an empty model at each of the plain hero's slots so the
+ * plain items do not hang off it. Its own items, the ones the game gives it and the ones picked,
+ * go under those slots' paths (src/item-builder-personas.ts). A real model in a persona's base is
+ * a part rebuilt by hand, Mirana's mount and Davion's dragon, and stays over the game's.
  */
 export const ARCANA_BASES: readonly ArcanaBase[] = [
   { id: 'bladeform_legacy', hero: 'juggernaut', item: '9059', styles: [0], parts: JUGGERNAUT },
@@ -80,6 +101,7 @@ export const ARCANA_BASES: readonly ArcanaBase[] = [
   { id: 'the_magus_cypher', hero: 'rubick', item: '12451', styles: [0], parts: ['12451', '12427'] },
   { id: 'voidstorm_asylum', hero: 'razor', item: '23095', styles: [0], parts: RAZOR },
   { id: 'voidstorm_asylum_v2', hero: 'razor', item: '23095', styles: [1], parts: RAZOR },
+  ...PERSONAS.map(([id, hero, item]) => ({ id, hero, item, parts: [item], persona: true as const })),
 ];
 
 /** The Terrorblade base, which the arcana window builds in the user's colour. */

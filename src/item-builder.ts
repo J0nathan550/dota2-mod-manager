@@ -149,6 +149,10 @@ export function defaultItemForWearable(text: string, sourceId: string | number):
  * "Attempting to set nonresident model 'models/items/earthshaker/es_cosmic/es_cosmic_totem.vmdl'
  * for item Def 459", the totem an ERROR model and the rest the plain hero (2026-10-18). Under the
  * stock paths the same files are loaded either way.
+ *
+ * A persona's switch to its own loadout ("persona") goes too: the persona is worn as the plain
+ * hero (src/item-builder-personas.ts), and switched it would put on the persona's stock items,
+ * which are not where the picks for its slots are.
  * @param heroes  the heroes whose own model the pick puts under their path
  * @param stock  the stock models the pick puts another model under, as normalizeAssetPath writes them
  */
@@ -160,7 +164,7 @@ function withoutFileSwaps(visuals: string, heroes: Set<string>, stock: Set<strin
     eachChild(visuals, c.body, (f) => { if (!f.isBlock) fields.set(f.key.toLowerCase(), f.value); });
     const type = (fields.get('type') || '').toLowerCase();
     const asset = fields.get('asset') || '';
-    if ((type === 'entity_model' && heroes.has(asset.toLowerCase()))
+    if (type === 'persona' || (type === 'entity_model' && heroes.has(asset.toLowerCase()))
       || ((type === 'model' || type === 'hero_model_change') && stock.has(normalizeAssetPath(asset)))) cut.push(c);
   });
   let out = visuals;
@@ -207,11 +211,13 @@ function appendItemEffect(visuals: string, effect: ItemEffect): string {
  * item's model_player, and no swap of the hero's model or of a stock model left in the visuals
  * (withoutFileSwaps says why). The particles keep the paid item's paths: the game loads a particle
  * when it is created, and a reconnect keeps them.
+ * @param targetId  the stock item to write it over, where its slot does not say: a persona's
+ *   (src/item-builder-personas.ts personaRecords)
  */
-export function itemEffectPatch(baseText: string, itemId: string | number, effectIds: string | string[] | null | undefined): { id: string; block: string } & ItemAssets {
+export function itemEffectPatch(baseText: string, itemId: string | number, effectIds: string | string[] | null | undefined, targetId?: string): { id: string; block: string } & ItemAssets {
   const source = findItem(baseText, itemId);
   if (!source) throw new Error(t('items_game: предмет {0} не найден', itemId));
-  const target = defaultItemForWearable(baseText, itemId);
+  const target = targetId ? listItems(baseText).find((i) => i.id === targetId) || null : defaultItemForWearable(baseText, itemId);
   if (!target) throw new Error(t('items_game: default_item для предмета {0} не найден', itemId));
   const key = effectKey(effectIds);
   // several at once: the window offers them that way, and one unknown id refuses the whole pick
@@ -243,6 +249,8 @@ export function itemEffectPatch(baseText: string, itemId: string | number, effec
   let patched = setBlockId(itemBlock(baseText, source), target.id);
   patched = setScalarField(patched, 'name', targetFields.get('name') || target.name || target.id);
   patched = setScalarField(patched, 'prefab', 'default_item');
+  // a persona's item names its own slot (head_persona_1), where the plain hero wears nothing
+  if (targetId) patched = setScalarField(patched, 'item_slot', inferredItemSlot(target));
   // the stock path, which the pick's VPK fills with the item's model (withoutFileSwaps says why)
   if (underStock) patched = setScalarField(patched, 'model_player', targetModel);
   else if (styled.model) patched = setScalarField(patched, 'model_player', styled.model);

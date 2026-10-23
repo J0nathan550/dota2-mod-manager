@@ -16,6 +16,7 @@ import { listItems, listItemsSteps, toUtf8, eachChild, blockBounds, itemSearchTe
 import { drain, PAUSE } from './steps.ts';
 import { styleTokens } from './item-builder-styles.ts';
 import { itemNote, untilReconnect, type ItemNote } from './arcana-notes.ts';
+import { personaSlots } from './item-builder-personas.ts';
 
 /** A slot of a hero the builder can dress, and the paid items that fit it. */
 export interface ItemSlot {
@@ -24,6 +25,8 @@ export interface ItemSlot {
   /** `styles`: the name token of each style, for an item with more than one (src/item-builder-styles.ts);
    *  `note`: what is known to go wrong with it in the game, or that nobody has checked (src/arcana-notes.ts) */
   options: { id: string; name: string; styles?: string[]; note?: ItemNote }[];
+  /** a persona's slot (src/item-builder-personas.ts): `part` false where the persona is picked */
+  persona?: { hero: string; part: boolean };
 }
 
 /** An item's visuals block, as text; null when it has none. */
@@ -63,11 +66,11 @@ const ITEM_SLOT_LABEL: Record<string, string> = {
   shoulder: 'плечи', shoulders: 'плечи', neck: 'шея', belt: 'пояс', arm: 'руки', arms: 'руки', gloves: 'перчатки', back: 'спина',
   wings: 'крылья', tail: 'хвост', legs: 'ноги', mount: 'ездовое', costume: 'костюм', misc: 'разное', ambient: 'эффекты', ambient_effects: 'эффекты',
   ability1: 'способность 1', ability2: 'способность 2', ability3: 'способность 3', ability4: 'способность 4', ability_ultimate: 'ультимейт',
-  summon: 'призыв', voice: 'голос', shapeshift: 'форма', hero_base: 'база героя',
+  summon: 'призыв', voice: 'голос', shapeshift: 'форма', hero_base: 'база героя', persona_selector: 'персона',
 };
 
 const ITEM_SLOT_ORDER = [
-  'head', 'body_head', 'hair', 'neck', 'shoulder', 'shoulders', 'arm', 'arms', 'gloves', 'back', 'weapon', 'offhand', 'offhand_weapon',
+  'persona_selector', 'head', 'body_head', 'hair', 'neck', 'shoulder', 'shoulders', 'arm', 'arms', 'gloves', 'back', 'weapon', 'offhand', 'offhand_weapon',
   'shield', 'armor', 'belt', 'legs', 'mount', 'wings', 'tail', 'costume', 'ambient', 'ambient_effects', 'ability1', 'ability2', 'ability3',
   'ability4', 'ability_ultimate', 'summon', 'voice', 'shapeshift', 'misc',
 ];
@@ -88,7 +91,8 @@ export function matchItemSlot(slot: unknown): string {
   return ITEM_SLOT_MATCH_ALIAS[clean] || clean;
 }
 
-function itemSlotId(heroIds: string[], slot: string): string {
+/** A builder slot's id: its heroes and its slot, item:pudge:weapon. */
+export function itemSlotId(heroIds: string[], slot: string): string {
   return `item:${heroIds.join('+')}:${slot}`;
 }
 
@@ -97,19 +101,21 @@ function titleLabel(text: unknown): string {
   return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
 }
 
-function slotDisplayLabel(slot: string): string {
+/** A slot's name as a tile says it, in the user's language: "Оружие". */
+export function slotDisplayLabel(slot: string): string {
   const equipSlot = canonicalItemSlot(slot);
   return titleLabel(t(ITEM_SLOT_LABEL[equipSlot] || equipSlot.replace(/_/g, ' ')));
 }
 
-function itemSlotLabel(heroIds: string[], slot: string): string {
+/** A slot's name with its heroes ahead of it, for a slot shown away from its hero: "Pudge · Оружие". */
+export function itemSlotLabel(heroIds: string[], slot: string): string {
   const heroes = heroIds.map((id) => heroDisplayName(canonicalHeroId(id))).join(' / ');
   return `${heroes} · ${slotDisplayLabel(slot)}`;
 }
 
 /**
- * A persona, by its name or its slot: the builder leaves these alone. A persona is a second hero
- * with slots of its own, and no stock item stands in for one.
+ * A persona, by its name or its slot: the plain hero's slots leave these out. A persona is a
+ * second hero with slots of its own, offered apart once it has a base (personaSlots).
  *
  * Arcanas used to be left alone as well, and so did the hero_base slot most of them sit in. They
  * are items like any other: each hero with a hero_base arcana has a stock "<Hero>'s Base" to
@@ -123,13 +129,14 @@ export function isPersonaItem(item: Partial<SchemaItem> | null): boolean {
     || /_persona_\d+$/i.test(slot);
 }
 
-function itemSlotIcon(slot: string): string {
+/** The icon a slot's tile shows while nothing in it has a picture. */
+export function itemSlotIcon(slot: string): string {
   return ({
     head: 'face', body_head: 'face', hair: 'content_cut', neck: 'checkroom', weapon: 'swords', offhand: 'shield', offhand_weapon: 'shield', shield: 'shield', armor: 'security',
     shoulder: 'accessibility_new', shoulders: 'accessibility_new', belt: 'checkroom', arm: 'front_hand', arms: 'front_hand', gloves: 'front_hand', back: 'checkroom',
     wings: 'flutter_dash', tail: 'gesture', legs: 'directions_run', mount: 'pets', costume: 'checkroom', ambient: 'auto_awesome', ambient_effects: 'auto_awesome',
     ability1: 'auto_fix_high', ability2: 'auto_fix_high', ability3: 'auto_fix_high', ability4: 'auto_fix_high', ability_ultimate: 'flash_on',
-    summon: 'pets', voice: 'mic', shapeshift: 'pets', misc: 'checkroom',
+    summon: 'pets', voice: 'mic', shapeshift: 'pets', misc: 'checkroom', persona_selector: 'theater_comedy',
   } as Record<string, string>)[canonicalItemSlot(slot)] || 'checkroom';
 }
 
@@ -203,6 +210,7 @@ export function* itemSlotsSteps(text: string): Generator<typeof PAUSE, ItemSlot[
       ...(note ? { note } : {}),
     });
   }
+  for (const s of personaSlots(text)) slots.set(s.slot, s);
 
   const order = new Map(ITEM_SLOT_ORDER.map((slot, i) => [slot, i]));
   return [...slots.values()]
@@ -233,11 +241,11 @@ export function* itemSlotsSteps(text: string): Generator<typeof PAUSE, ItemSlot[
  * @param text  items_game
  * @param slots  itemSlots(text), when the caller has it already
  */
-export function itemSets(text: string, slots: Pick<ItemSlot, 'slot' | 'slotLabel' | 'options'>[] = itemSlots(text)): ItemSet[] {
+export function itemSets(text: string, slots: Pick<ItemSlot, 'slot' | 'slotLabel' | 'options' | 'persona'>[] = itemSlots(text)): ItemSet[] {
   const items = listItems(text);
   const byName = new Map(items.map((i) => [i.name, i]));
   const home = new Map<string, Pick<ItemSlot, 'slot' | 'slotLabel'>>(); // wearable id -> its slot in the builder
-  for (const s of slots) for (const o of s.options) home.set(o.id, s);
+  for (const s of slots) if (!s.persona) for (const o of s.options) home.set(o.id, s);
   const out: ItemSet[] = [];
   for (const set of items) {
     if (set.prefab !== 'bundle' || !set.bundleItems || !set.bundleItems.length || /do not use/i.test(set.name)) continue;

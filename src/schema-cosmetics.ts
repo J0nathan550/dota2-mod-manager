@@ -14,6 +14,7 @@ import type { Settings } from './settings.ts';
 import type { Library } from './library.ts';
 import type { LibRecord } from './types.ts';
 import type { ItemSet } from './item-builder.ts';
+import { displaced, isSelectorSlot } from './item-builder-personas.ts';
 
 /** What the window is told about the free looks and the item builder (cosmeticSlots). */
 export type CosmeticSlots = { slots: CosmeticSlot[]; sets: ItemSet[]; names?: Record<string, string>; error?: string };
@@ -87,7 +88,8 @@ export function createCosmetics({ library, settings, gamePath, vanilla, refresh 
             picked: rec ? rec.itemId : null,
             pickedEffect: rec ? (rec.effectId || '') : '',
             recordId: rec ? rec.id : null,
-            effects,
+            // a persona has no model for an effect to sit on
+            effects: it.persona && !it.persona.part ? [] : effects,
           };
         });
         const at = slots.findIndex((s) => s.slot === 'weather');
@@ -136,6 +138,9 @@ export function createCosmetics({ library, settings, gamePath, vanilla, refresh 
       ? library.update(dormant.id, { name, enabled: true, effectId: effect || undefined })
       : library.add({ name, categoryId: 'cosmetic', styleLabel: null, fileRef: null, preview: null, files: [] })) as LibRecord;
     if (!dormant) library.update(rec.id, { slot, itemId: id, ...(effect ? { effectId: effect } : {}) });
+    // a persona is worn with its own items alone (src/item-builder-personas.ts): the hero's plain
+    // picks go off, kept in My mods to be put back on
+    if (isSelectorSlot(slot)) for (const r of displaced(library.list())) library.setEnabled(r.id, false);
     if (write) refresh();
     return library.find(rec.id);
   }

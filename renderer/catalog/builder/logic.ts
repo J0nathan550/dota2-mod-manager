@@ -80,6 +80,22 @@ export function matchingSets(sets: ItemSet[], query: string): ItemSet[] {
 export const setIsOn = (set: ItemSet, pickedIn: PickedIn): boolean =>
   set.pieces.every((p) => !p.fits || pickedIn(p.slot)?.itemId === p.itemId);
 
+/** The heroes with a persona picked, by the id their slots carry. */
+export function personaHeroes(slots: ItemSlot[], pickedIn: PickedIn): Set<string> {
+  return new Set(slots.filter((s) => s.persona && !s.persona.part && pickedIn(s.slot)).map((s) => s.persona!.hero));
+}
+
+/**
+ * The slots on offer once the personas picked are counted (src/item-builder-personas.ts): a hero
+ * with a persona on shows the persona's slot and its own ones alone, and a hero without one shows
+ * its plain slots and the slot to pick a persona in. A persona is worn with its own items only.
+ */
+export function withPersonas<T extends ItemSlot>(slots: T[], pickedIn: PickedIn): T[] {
+  const on = personaHeroes(slots, pickedIn);
+  if (!on.size) return slots.filter((s) => !s.persona?.part);
+  return slots.filter((s) => (s.persona ? !s.persona.part || on.has(s.persona.hero) : !(s.heroIds || []).some((h) => on.has(h))));
+}
+
 /** The builder's slots by the hero they belong to, heroes in alphabetical order. */
 export function heroesOf(slots: ItemSlot[]): [string, ItemSlot[]][] {
   const heroes = new Map<string, ItemSlot[]>();

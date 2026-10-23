@@ -54,7 +54,9 @@ export function itemCosmeticSlots(): CosmeticSlot[] {
   return cosmeticSlotList().filter((s) => s.kind === 'item-effect' || String(s.slot || '').startsWith('item:'));
 }
 
-export const heroSets = (heroName: string): CosmeticSet[] => (state.cosmeticSets || []).filter((s) => s.heroLabel === heroName);
+/** A hero's sets: none with a persona on, whose own items are all it wears (src/item-builder-personas.ts). */
+export const heroSets = (heroName: string): CosmeticSet[] => (cosmeticSlotList().some((s) => s.heroLabel === heroName && s.persona && !s.persona.part && pickedIn(s.slot))
+  ? [] : (state.cosmeticSets || []).filter((s) => s.heroLabel === heroName));
 
 /* One builder window on show at a time. Each open counts up: the count is the window's key, so
  * opening draws it fresh (its cards play their entrance) and a change inside it updates in place. */

@@ -25,6 +25,7 @@ the code, not in this page.
 | [`src/arcana.ts`](#srcarcanats) | An arcana as a mod, built from the game's own files: the look of an item a player has not got, |
 | [`src/atomic-file.ts`](#srcatomic-filets) | Replace a small file so that whoever reads it next - this process, or the next start after |
 | [`src/beta.ts`](#srcbetats) | The beta channel: who is let in, and which update feed this copy reads. |
+| [`src/build-bar.ts`](#srcbuild-barts) | The bar at the bottom of the window while the item table builds in the background |
 | [`src/capture.ts`](#srccapturets) | Take a screenshot of the window, and try again when Chromium has no frame to hand over yet. |
 | [`src/catalog-signature.ts`](#srccatalog-signaturets) | Making the catalog's own author the only person who can change the catalog. |
 | [`src/catalog.ts`](#srccatalogts) | Catalog: fetch + cache mods.json / constants.json / guides.json from the Dota2PornFx repo |
@@ -70,6 +71,7 @@ the code, not in this page.
 | [`src/ipc.ts`](#srcipcts) | Every IPC module, registered in one place over the context src/main.ts builds. A new |
 | [`src/item-builder-assets.ts`](#srcitem-builder-assetsts) | What an item builder pick needs beyond its block in items_game: the game's files it puts under |
 | [`src/item-builder-effects.ts`](#srcitem-builder-effectsts) | The particle effects the item builder can put on top of an item: the effect's id, its name in |
+| [`src/item-builder-personas.ts`](#srcitem-builder-personasts) | Personas in the item builder: a hero's second look, with slots and items of its own. |
 | [`src/item-builder-slots.ts`](#srcitem-builder-slotsts) | The item builder's offer: for each hero, the slots it can dress, the paid wearables that fit |
 | [`src/item-builder-styles.ts`](#srcitem-builder-stylests) | An item's styles in the item builder: which ones it has, and its visuals with one of them made |
 | [`src/item-builder.ts`](#srcitem-builderts) | The item builder: a hero's stock item built from one of its wearables, with an effect on top. |
@@ -488,6 +490,11 @@ her cape, armour and quiver are the user's picks, or the stock items. Her first 
 set's cape, armour and quiver there too, so she wore the arcana's cape whatever was picked, and
 her second style had a variant for under Mania's Mask (both replaced on 2026-10-23). Axe's Fists
 of Axe Unleashed is an immortal, not an arcana, but it swaps his whole model the same way.
+
+A persona's base is its bare body, and an empty model at each of the plain hero's slots so the
+plain items do not hang off it. Its own items, the ones the game gives it and the ones picked,
+go under those slots' paths (src/item-builder-personas.ts). A real model in a persona's base is
+a part rebuilt by hand, Mirana's mount and Davion's dragon, and stays over the game's.
 
 ### `TERRORBLADE_BASE`
 
@@ -969,6 +976,21 @@ export function betaState({ discordId = null, beta = null, wanted = false }: Bet
 What the settings screen needs to draw: whether to show the switch at all, and where it sits.
 Somebody who is not on the list is not told there is a list - a switch they cannot use is
 noise, and "you are not invited" is a worse thing to read than nothing.
+
+## src/build-bar.ts
+
+The bar at the bottom of the window while the item table builds in the background
+(src/schema-build.ts builds it, src/schema-service.ts runs it).
+
+### `buildBar`
+
+```ts
+export function buildBar(send: (evt: { type: 'count'; label: string; done: number; total: number } | { type: 'done' }) => void, label: () => string, after = 400, now = () => Date.now()): (step: BuildStep | null) => void
+```
+
+The bar at the bottom of the window for a build in the background: shown once the build has run
+for `after` ms, so a pick that takes a fifth of a second does not flash it, and counted in the
+picks built anew. A build with none to build, the merge and the write alone, shows nothing.
 
 ## src/capture.ts
 
@@ -3430,6 +3452,133 @@ export function itemEffects(): { id: string; name: string }[]
 
 The effect variants the synthetic cosmetics/items picker can apply.
 
+## src/item-builder-personas.ts
+
+Personas in the item builder: a hero's second look, with slots and items of its own.
+
+A persona is an item in the hero's persona_selector slot whose visuals switch the hero to a
+second loadout: the Toy Butcher wears weapon_persona_1, armor_persona_1 and the rest, slots of
+their own, each with a stock item every account has. The builder cannot switch loadouts the way
+the paid item does: what a match loads is the server's own table, and that keeps the plain hero.
+So a persona goes on the way an arcana does (src/arcana-bases.ts): its body, compiled again by
+J0nathan550, under the plain hero's model path, with an empty model at each of the plain hero's
+slots. Its own items go under those slots' paths. Each of its slots is given one of the plain
+hero's (personaLayouts), and wears the game's own item for it until something is picked there.
+
+With a persona on, the hero wears its items and nothing else (J0nathan550, 2026-10-23): a plain
+item hangs off the persona's body where the persona has nothing, and Valve drew the persona's
+own for it. The window shows that hero's persona slots alone, a pick of a persona switches the
+hero's plain picks off (src/schema-cosmetics.ts), and the build leaves out any that are left on,
+from a preset say (personaRecords). Arcanas have no such rule: their heroes wear anything.
+
+### `SELECTOR`
+
+```ts
+export const SELECTOR = 'persona_selector'
+```
+
+The slot a persona is picked in.
+
+### `PERSONA_BASES`
+
+```ts
+export const PERSONA_BASES = ARCANA_BASES.filter((b) => b.persona)
+```
+
+The personas the builder offers: the ones with a base.
+
+### `PersonaPart`
+
+```ts
+export interface PersonaPart { slot: string; host: SchemaItem; given: SchemaItem | null; options: SchemaItem[] }
+```
+
+One of a persona's slots: the plain stock item it is worn under, the game's own item for it, and the paid ones.
+
+### `PersonaLayout`
+
+```ts
+export interface PersonaLayout { hero: string; selector: SchemaItem; personas: SchemaItem[]; parts: PersonaPart[] }
+```
+
+A hero's persona as the builder puts it on.
+
+### `personaLayouts`
+
+```ts
+export function personaLayouts(text: string): Map<string, PersonaLayout>
+```
+
+Each hero with a persona the builder offers, and how it is put on. Kept while the game's table is the same.
+
+### `personaSlots`
+
+```ts
+export function personaSlots(text: string): ItemSlot[]
+```
+
+Each persona with a base, a slot to pick it in, and a slot for each of its own (src/item-builder-personas.ts).
+
+### `isSelectorSlot`
+
+```ts
+export const isSelectorSlot = (slot: string | undefined): boolean => String(slot || '').endsWith(`:${SELECTOR}`)
+```
+
+Whether a slot id is a hero's persona slot, where a persona is picked.
+
+### `personasOn`
+
+```ts
+export function personasOn(records: LibRecord[]): Map<string, string>
+```
+
+The heroes with a persona on, each with the persona's item: an enabled pick of one the builder offers.
+
+### `leftOut`
+
+```ts
+export function leftOut(rec: LibRecord, on: Map<string, string>): string | null
+```
+
+Why a pick stays out of the build while these personas are on; null when it goes in.
+
+### `displaced`
+
+```ts
+export function displaced(records: LibRecord[]): LibRecord[]
+```
+
+The enabled plain picks of the heroes with a persona on: a pick of the persona switches them off.
+
+### `BuildRecord`
+
+```ts
+export type BuildRecord = LibRecord &
+```
+
+A record as the build takes it: a persona's with the stock item it is written over.
+
+### `personaRecords`
+
+```ts
+export function personaRecords(records: LibRecord[], text: string): { records: BuildRecord[]; left: { rec: LibRecord; why: string }[] }
+```
+
+The enabled records a build takes, personas sorted out: a pick that cannot be worn with the
+personas on is left out, with why; a persona's pick names the stock item it goes over; and
+each slot of a persona on with nothing picked wears the game's own item for it.
+
+### `personaAssets`
+
+```ts
+export function personaAssets(rec: BuildRecord, assets: VpkEntry[], ready: ReadyBase[]): VpkEntry[]
+```
+
+A persona slot's files over the persona's base. The base wins wherever it has a file, its
+particles rebuilt to fit the body, except at the slot's own model: there a pick wins, and the
+game's own item wins over an empty model but not over one rebuilt by hand (Mirana's mount).
+
 ## src/item-builder-slots.ts
 
 The item builder's offer: for each hero, the slots it can dress, the paid wearables that fit
@@ -3487,19 +3636,51 @@ export function matchItemSlot(slot: unknown): string
 
 A slot name with its aliases folded together (offhand_weapon is offhand, shoulder is shoulders).
 
+### `itemSlotId`
+
+```ts
+export function itemSlotId(heroIds: string[], slot: string): string
+```
+
+A builder slot's id: its heroes and its slot, item:pudge:weapon.
+
+### `slotDisplayLabel`
+
+```ts
+export function slotDisplayLabel(slot: string): string
+```
+
+A slot's name as a tile says it, in the user's language: "Оружие".
+
+### `itemSlotLabel`
+
+```ts
+export function itemSlotLabel(heroIds: string[], slot: string): string
+```
+
+A slot's name with its heroes ahead of it, for a slot shown away from its hero: "Pudge · Оружие".
+
 ### `isPersonaItem`
 
 ```ts
 export function isPersonaItem(item: Partial<SchemaItem> | null): boolean
 ```
 
-A persona, by its name or its slot: the builder leaves these alone. A persona is a second hero
-with slots of its own, and no stock item stands in for one.
+A persona, by its name or its slot: the plain hero's slots leave these out. A persona is a
+second hero with slots of its own, offered apart once it has a base (personaSlots).
 
 Arcanas used to be left alone as well, and so did the hero_base slot most of them sit in. They
 are items like any other: each hero with a hero_base arcana has a stock "<Hero>'s Base" to
 dress (twelve on the game of 2026-10-15), and what an arcana needs beyond its block is its hero
 model under the plain one's path, which item-builder.ts itemEffectPatch now lists.
+
+### `itemSlotIcon`
+
+```ts
+export function itemSlotIcon(slot: string): string
+```
+
+The icon a slot's tile shows while nothing in it has a picture.
 
 ### `itemSlots`
 
@@ -3520,7 +3701,7 @@ itemSlots, a pause every couple of thousand items: the table's 26 000 are a quar
 ### `itemSets`
 
 ```ts
-export function itemSets(text: string, slots: Pick<ItemSlot, 'slot' | 'slotLabel' | 'options'>[] = itemSlots(text)): ItemSet[]
+export function itemSets(text: string, slots: Pick<ItemSlot, 'slot' | 'slotLabel' | 'options' | 'persona'>[] = itemSlots(text)): ItemSet[]
 ```
 
 A hero's sets as the builder puts them on: every wearable of the set that has a slot in the
@@ -3655,7 +3836,7 @@ The stock default_item that matches a wearable by slot and by the hero(es) that 
 ### `itemEffectPatch`
 
 ```ts
-export function itemEffectPatch(baseText: string, itemId: string | number, effectIds: string | string[] | null | undefined): { id: string; block: string } & ItemAssets
+export function itemEffectPatch(baseText: string, itemId: string | number, effectIds: string | string[] | null | undefined, targetId?: string): { id: string; block: string } & ItemAssets
 ```
 
 Turn one paid wearable into the hero's stock item for that slot.
@@ -3670,6 +3851,11 @@ A model the VPK carries under a stock path is named by that path, not the paid i
 item's model_player, and no swap of the hero's model or of a stock model left in the visuals
 (withoutFileSwaps says why). The particles keep the paid item's paths: the game loads a particle
 when it is created, and a reconnect keeps them.
+
+```
+@param targetId  the stock item to write it over, where its slot does not say: a persona's
+(src/item-builder-personas.ts personaRecords)
+```
 
 ## src/item-portraits.ts
 
@@ -6393,6 +6579,8 @@ that needs the table written before it returns, and with the rest of the main pr
 between the steps for one that does not: the window's other requests, the bar at the bottom,
 and the Play button, which waits for the last build before the game starts.
 
+Hands on from [`src/build-bar.ts`](#srcbuild-barts): `buildBar`.
+
 ### `BuildStep`
 
 ```ts
@@ -6416,16 +6604,6 @@ export interface Refreshed
 ```
 
 What a build of the table answers.
-
-### `buildBar`
-
-```ts
-export function buildBar(send: (evt: { type: 'count'; label: string; done: number; total: number } | { type: 'done' }) => void, label: () => string, after = 400, now = () => Date.now()): (step: BuildStep | null) => void
-```
-
-The bar at the bottom of the window for a build in the background: shown once the build has run
-for `after` ms, so a pick that takes a fifth of a second does not flash it, and counted in the
-picks built anew. A build with none to build, the merge and the write alone, shows nothing.
 
 ### `isItemPick`
 
