@@ -19,7 +19,7 @@ import { createBackgroundBuilds, createTableBuild, type BuildStep, type BuildYie
 import { drain } from './steps.ts';
 import { chooseBases } from './arcana-bases.ts';
 import type { BaseStore } from './arcana-base-store.ts';
-import { entryPath } from './vpk.ts';
+import { entryPath, sharedVpkIndex } from './vpk.ts';
 import type { Settings } from './settings.ts';
 import type { Library } from './library.ts';
 
@@ -135,7 +135,8 @@ export function createSchemaService({ settings, library, installer, userDataDir,
       const base = vanillaBase();
       const { list: own, beneath } = yield* table.buildSteps(base.text, game);
       // every other player of the hero in the user's look, when asked for (src/item-builder-everyone.ts)
-      const list = settings.get('everyoneWearsMine') ? [...own, ...everyoneWears(base.text, own, beneath)] : own;
+      const pak = () => sharedVpkIndex(path.join(game, 'dota', 'pak01_dir.vpk'));
+      const list = settings.get('everyoneWearsMine') ? [...own, ...everyoneWears(base.text, own, beneath, (p) => pak().read(p))] : own;
       if (!list.length) return drop();
       const res = yield* schema.deploySteps({ gamePath: game, folder: patcher.FOLDER, patches: list, base, beneath });
       settings.set('schemaStamp', stampOf(res.stamp));

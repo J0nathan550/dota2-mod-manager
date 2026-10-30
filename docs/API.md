@@ -3692,12 +3692,20 @@ which is everybody's, and the sword at its own, which nothing of ours filled. A 
 with a plain item hanging off it, the thing src/item-builder-personas.ts keeps off the user's
 own hero, is what everybody else's looked like.
 
-So, for each slot whose stock path the build fills (a pick's model, else a base's part), the same
-bytes go under every other wearable of that hero and slot, at each model path its block names,
-its styles' included. Its block in the table becomes the pick's (else the stock item's), keeping
-its own name and picture, so its own particles do not hang off our model. Left alone: items
-shared with other heroes, and any that changes the hero itself (an arcana's model, a persona),
-whose body the server sets.
+So a hero the build dresses (a pick, or a base's part, at one of his stock paths) is worn by
+everybody exactly as the user's is, slot by slot. Every other wearable of his goes under the
+file the user's hero wears in its slot, at each model path its block names, its styles' included:
+- the build's, where it fills the stock path (a pick's model, else a base's part);
+- the game's own stock item, where it does not: the Planetfall base fills Earthshaker's totem and
+  bracers, and his belt is the plain one, so a store belt was drawn on the arcana (J0nathan550,
+  2026-10-30, with the Intergalactic Orbliterator on);
+- nothing, where the stock item has no model: Earthshaker's head is his body's, and a store head
+  sat on the arcana's. Nothing is Valve's own invisible box, the one Monkey King's transformation
+  hides his wearables with.
+Its block in the table becomes the pick's, else the stock item's, keeping its own name and
+picture, so its own particles do not hang off our model. Left alone: a slot with no stock item,
+items shared with other heroes, and any that changes the hero itself (an arcana's model, a
+persona), whose body the server sets.
 
 For a persona the stock paths hold the empty models its base puts there, so another player's plain
 items go the way the user's own do, and the persona's body is not dressed in them.
@@ -3709,16 +3717,16 @@ walked once whatever the number of heroes: a walk a hero was 118 ms each.
 ### `everyoneWears`
 
 ```ts
-export function everyoneWears(text: string, list: SchemaPatch[], beneath: VpkEntry[], heroes?: string[]): SchemaPatch[]
+export function everyoneWears(text: string, list: SchemaPatch[], beneath: VpkEntry[], read: (path: string) => Buffer | null, heroes?: string[]): SchemaPatch[]
 ```
 
-The patches that dress every other wearable of a hero as the build dresses the stock item of its
-slot, for every hero whose stock path the build fills. Merged after the build's own, whose files
-and blocks win where both name one.
+The patches that dress every other wearable of each hero the build dresses as the user's hero is
+dressed. Merged after the build's own, whose files and blocks win where both name one.
 
 ```
 @param list     the build's patches (src/schema-build.ts buildSteps)
 @param beneath  the arcana bases' files, under every pick's
+@param read     a file of the game's pak01, for its stock items and the invisible box
 @param heroes   only these, as items_game names them without npc_dota_hero_; none: all of them
 ```
 

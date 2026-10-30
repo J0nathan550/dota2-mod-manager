@@ -8,12 +8,20 @@
  * with a plain item hanging off it, the thing src/item-builder-personas.ts keeps off the user's
  * own hero, is what everybody else's looked like.
  *
- * So, for each slot whose stock path the build fills (a pick's model, else a base's part), the same
- * bytes go under every other wearable of that hero and slot, at each model path its block names,
- * its styles' included. Its block in the table becomes the pick's (else the stock item's), keeping
- * its own name and picture, so its own particles do not hang off our model. Left alone: items
- * shared with other heroes, and any that changes the hero itself (an arcana's model, a persona),
- * whose body the server sets.
+ * So a hero the build dresses (a pick, or a base's part, at one of his stock paths) is worn by
+ * everybody exactly as the user's is, slot by slot. Every other wearable of his goes under the
+ * file the user's hero wears in its slot, at each model path its block names, its styles' included:
+ * - the build's, where it fills the stock path (a pick's model, else a base's part);
+ * - the game's own stock item, where it does not: the Planetfall base fills Earthshaker's totem and
+ *   bracers, and his belt is the plain one, so a store belt was drawn on the arcana (J0nathan550,
+ *   2026-10-30, with the Intergalactic Orbliterator on);
+ * - nothing, where the stock item has no model: Earthshaker's head is his body's, and a store head
+ *   sat on the arcana's. Nothing is Valve's own invisible box, the one Monkey King's transformation
+ *   hides his wearables with.
+ * Its block in the table becomes the pick's, else the stock item's, keeping its own name and
+ * picture, so its own particles do not hang off our model. Left alone: a slot with no stock item,
+ * items shared with other heroes, and any that changes the hero itself (an arcana's model, a
+ * persona), whose body the server sets.
  *
  * For a persona the stock paths hold the empty models its base puts there, so another player's plain
  * items go the way the user's own do, and the persona's body is not dressed in them.
@@ -33,6 +41,9 @@ const CHANGES_HERO = /"type"\s+"(entity_model|hero_model_change|persona)"/i;
 /** Every model a block names: its own, and each of its styles'. */
 const MODELS = /"model_player\d*"\s+"([^"]+)"/gi;
 
+/** What a slot whose stock item has no model is worn as: Valve's invisible box, the first the game has. */
+const NOTHING = ['models/heroes/monkey_king/transform_invisiblebox.vmdl_c', 'models/development/invisiblebox.vmdl_c'];
+
 /** The first hero an item's used_by_heroes names. */
 const FIRST_HERO = /"(npc_dota_hero_\w+)"\s+"1"/i;
 
@@ -44,14 +55,14 @@ function under(path: string, en: VpkEntry): VpkEntry {
 }
 
 /**
- * The patches that dress every other wearable of a hero as the build dresses the stock item of its
- * slot, for every hero whose stock path the build fills. Merged after the build's own, whose files
- * and blocks win where both name one.
+ * The patches that dress every other wearable of each hero the build dresses as the user's hero is
+ * dressed. Merged after the build's own, whose files and blocks win where both name one.
  * @param list     the build's patches (src/schema-build.ts buildSteps)
  * @param beneath  the arcana bases' files, under every pick's
+ * @param read     a file of the game's pak01, for its stock items and the invisible box
  * @param heroes   only these, as items_game names them without npc_dota_hero_; none: all of them
  */
-export function everyoneWears(text: string, list: SchemaPatch[], beneath: VpkEntry[], heroes?: string[]): SchemaPatch[] {
+export function everyoneWears(text: string, list: SchemaPatch[], beneath: VpkEntry[], read: (path: string) => Buffer | null, heroes?: string[]): SchemaPatch[] {
   const files = new Map<string, VpkEntry>();
   for (const en of [...list.flatMap((p) => p.assets || []), ...beneath]) {
     const key = entryPath(en).toLowerCase();
@@ -67,16 +78,28 @@ export function everyoneWears(text: string, list: SchemaPatch[], beneath: VpkEnt
   };
   const slotKey = (hero: string, i: SchemaItem) => `${hero}|${canonicalItemSlot(inferredItemSlot(i))}`;
 
-  // the slots the build fills, found by path first: a lookup, before any item's heroes are read
-  const filled = new Map<string, { stock: SchemaItem; ours: VpkEntry }>();
-  for (const stock of items) {
-    if (stock.prefab !== 'default_item' || !stock.model) continue;
-    const ours = files.get(compiled(stock.model).toLowerCase());
-    const hero = ours && heroOf(stock);
-    if (ours && hero) filled.set(slotKey(hero, stock), { stock, ours });
+  // the heroes the build dresses, found by path first: a lookup, before any item's heroes are read
+  const stocks = items.filter((i) => i.prefab === 'default_item');
+  const wanted = new Set(stocks.filter((i) => i.model && files.has(compiled(i.model).toLowerCase())).map(heroOf).filter((h) => h !== null));
+  if (!wanted.size) return [];
+  const stockOf = new Map<string, SchemaItem>();
+  for (const i of stocks) {
+    const named = FIRST_HERO.exec(text.slice(i.start, i.end))?.[1].toLowerCase();
+    const hero = named && wanted.has(named) ? heroOf(i) : null;
+    if (hero) stockOf.set(slotKey(hero, i), i);
   }
-  if (!filled.size) return [];
-  const wanted = new Set([...filled.keys()].map((k) => k.slice(0, k.indexOf('|'))));
+  // what the user's hero wears in a slot, the same entry for every item of it so the pak has it once
+  const worn = new Map<string, VpkEntry | null>();
+  const wornIn = (stock: SchemaItem): VpkEntry | null => {
+    if (!worn.has(stock.id)) {
+      const at = stock.model ? compiled(stock.model).toLowerCase() : null;
+      const own = at ? files.get(at) ?? null : null;
+      const gameAt = at ?? NOTHING.find((p) => read(p));
+      const data = own ? null : gameAt ? read(gameAt) : null;
+      worn.set(stock.id, own ?? (gameAt && data ? entryAt(gameAt, data) : null));
+    }
+    return worn.get(stock.id)!;
+  };
 
   const out: SchemaPatch[] = [];
   for (const item of items) {
@@ -87,15 +110,16 @@ export function everyoneWears(text: string, list: SchemaPatch[], beneath: VpkEnt
     const named = FIRST_HERO.exec(raw)?.[1].toLowerCase();
     if (!named || !wanted.has(named) || CHANGES_HERO.test(raw)) continue;
     const hero = heroOf(item);
-    const slot = hero && filled.get(slotKey(hero, item));
-    if (!slot) continue;
+    const stock = hero && stockOf.get(slotKey(hero, item));
+    const ours = stock && wornIn(stock);
+    if (!stock || !ours) continue;
     const paths = [...new Set([...raw.matchAll(MODELS)].map((m) => compiled(m[1]).toLowerCase()))].filter((p) => !files.has(p));
     if (!paths.length) continue;
     out.push({
       id: item.id,
-      block: asItem(blocks.get(slot.stock.id) ?? text.slice(slot.stock.start, slot.stock.end), text, item, item.model),
-      assets: paths.map((p) => under(p, slot.ours)),
-      source: `${slot.stock.name}: everybody's`,
+      block: asItem(blocks.get(stock.id) ?? text.slice(stock.start, stock.end), text, item, item.model),
+      assets: paths.map((p) => under(p, ours)),
+      source: `${stock.name}: everybody's`,
     });
   }
   return out;
