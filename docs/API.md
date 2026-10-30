@@ -73,6 +73,7 @@ the code, not in this page.
 | [`src/ipc.ts`](#srcipcts) | Every IPC module, registered in one place over the context src/main.ts builds. A new |
 | [`src/item-builder-assets.ts`](#srcitem-builder-assetsts) | What an item builder pick needs beyond its block in items_game: the game's files it puts under |
 | [`src/item-builder-effects.ts`](#srcitem-builder-effectsts) | The particle effects the item builder can put on top of an item: the effect's id, its name in |
+| [`src/item-builder-everyone.ts`](#srcitem-builder-everyonets) | Everybody playing a hero wears the user's look for it, not only the user. |
 | [`src/item-builder-personas.ts`](#srcitem-builder-personasts) | Personas in the item builder: a hero's second look, with slots and items of its own. |
 | [`src/item-builder-refits.ts`](#srcitem-builder-refitsts) | Refits: an item's model made again to fit a body another item gives the hero. Faceless Void's |
 | [`src/item-builder-slots.ts`](#srcitem-builder-slotsts) | The item builder's offer: for each hero, the slots it can dress, the paid wearables that fit |
@@ -3679,6 +3680,50 @@ export function itemEffects(): { id: string; name: string }[]
 
 The effect variants the synthetic cosmetics/items picker can apply.
 
+## src/item-builder-everyone.ts
+
+Everybody playing a hero wears the user's look for it, not only the user.
+
+The builder puts a pick's model under the stock item's path, and an arcana base its body under
+the hero's. A match loads each wearable from the path the server's own item table names
+(src/item-builder.ts, withoutFileSwaps), so another player's Juggernaut with a sword of his own
+was drawn with that sword, on the base's body when one was on: the body is at the hero's path,
+which is everybody's, and the sword at its own, which nothing of ours filled. A persona's body
+with a plain item hanging off it, the thing src/item-builder-personas.ts keeps off the user's
+own hero, is what everybody else's looked like.
+
+So, for each slot whose stock path the build fills (a pick's model, else a base's part), the same
+bytes go under every other wearable of that hero and slot, at each model path its block names,
+its styles' included. Its block in the table becomes the pick's (else the stock item's), keeping
+its own name and picture, so its own particles do not hang off our model. Left alone: items
+shared with other heroes, and any that changes the hero itself (an arcana's model, a persona),
+whose body the server sets.
+
+The bytes are one buffer under many paths, and the pak stores them once (src/vpk-write.ts).
+Tried on Juggernaut first: five slots of models, about 140 wearables (2026-10-30).
+
+### `EVERYONE_HEROES`
+
+```ts
+export const EVERYONE_HEROES = ['juggernaut']
+```
+
+The heroes it is tried on, as items_game names them without npc_dota_hero_.
+
+### `everyoneWears`
+
+```ts
+export function everyoneWears(text: string, list: SchemaPatch[], beneath: VpkEntry[], heroes: string[] = EVERYONE_HEROES): SchemaPatch[]
+```
+
+The patches that dress every other wearable of these heroes as the build dresses the stock item
+of its slot. Merged after the build's own, whose files and blocks win where both name one.
+
+```
+@param list     the build's patches (src/schema-build.ts buildSteps)
+@param beneath  the arcana bases' files, under every pick's
+```
+
 ## src/item-builder-personas.ts
 
 Personas in the item builder: a hero's second look, with slots and items of its own.
@@ -4108,6 +4153,15 @@ A style other than the item's first goes last, as "style-2" (src/item-builder-st
 rides in the same string so that a record, a preset and a shared link carry it as they carry the
 effects, with nothing new to keep in step; the first style is no token at all, which keeps every
 pick made before styles could be chosen the same pick.
+
+### `asItem`
+
+```ts
+export function asItem(block: string, text: string, item: { id: string; start: number }, model: string | null): string
+```
+
+A built block worn as another item of the same hero and slot (src/item-builder-everyone.ts): the
+built visuals, under that item's id, its own name and picture, and the model path its block names.
 
 ### `defaultItemForWearable`
 
