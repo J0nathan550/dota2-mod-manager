@@ -3699,29 +3699,27 @@ its own name and picture, so its own particles do not hang off our model. Left a
 shared with other heroes, and any that changes the hero itself (an arcana's model, a persona),
 whose body the server sets.
 
-The bytes are one buffer under many paths, and the pak stores them once (src/vpk-write.ts).
-Tried on Juggernaut first: five slots of models, about 140 wearables (2026-10-30).
+For a persona the stock paths hold the empty models its base puts there, so another player's plain
+items go the way the user's own do, and the persona's body is not dressed in them.
 
-### `EVERYONE_HEROES`
-
-```ts
-export const EVERYONE_HEROES = ['juggernaut']
-```
-
-The heroes it is tried on, as items_game names them without npc_dota_hero_.
+The bytes are one buffer under many paths, and the pak stores them once (src/vpk-write.ts). Tried
+on Juggernaut first (five slots, about 140 wearables), then every hero (2026-10-30). The table is
+walked once whatever the number of heroes: a walk a hero was 118 ms each.
 
 ### `everyoneWears`
 
 ```ts
-export function everyoneWears(text: string, list: SchemaPatch[], beneath: VpkEntry[], heroes: string[] = EVERYONE_HEROES): SchemaPatch[]
+export function everyoneWears(text: string, list: SchemaPatch[], beneath: VpkEntry[], heroes?: string[]): SchemaPatch[]
 ```
 
-The patches that dress every other wearable of these heroes as the build dresses the stock item
-of its slot. Merged after the build's own, whose files and blocks win where both name one.
+The patches that dress every other wearable of a hero as the build dresses the stock item of its
+slot, for every hero whose stock path the build fills. Merged after the build's own, whose files
+and blocks win where both name one.
 
 ```
 @param list     the build's patches (src/schema-build.ts buildSteps)
 @param beneath  the arcana bases' files, under every pick's
+@param heroes   only these, as items_game names them without npc_dota_hero_; none: all of them
 ```
 
 ## src/item-builder-personas.ts

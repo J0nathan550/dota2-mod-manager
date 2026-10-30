@@ -197,7 +197,7 @@ function SettingsScreen({ m, actions }: { m: SettingsModel; actions: SettingsAct
           <span className="settings-label">{L`Мой вид на всех, кто играет этим героем`}</span>
           <Toggle id="everyoneToggle" on={m.everyone} label={L`Мой вид на всех, кто играет этим героем`} onClick={actions.everyone} />
         </div>
-        <div className="settings-hint">{L`Пока только Джаггернаут. Кто бы им ни играл, союзник или враг, у тебя на экране он будет в тех предметах, что ты собрал, а не в своих. Видишь это только ты. Работает с выключенным безопасным режимом.`}</div>
+        <div className="settings-hint">{L`Кто бы ни играл героем, которого ты собрал, союзник или враг, у тебя на экране он будет в твоих предметах, а не в своих. Видишь это только ты. Работает с выключенным безопасным режимом.`}</div>
       </Block>
 
       <Block i={4} title={L`Каталог`}>

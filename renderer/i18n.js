@@ -134,8 +134,8 @@ const EN = {
 
   // ---------- the item builder's look on everybody (src/item-builder-everyone.ts) ----------
   'Мой вид на всех, кто играет этим героем': 'My look on everyone playing that hero',
-  'Пока только Джаггернаут. Кто бы им ни играл, союзник или враг, у тебя на экране он будет в тех предметах, что ты собрал, а не в своих. Видишь это только ты. Работает с выключенным безопасным режимом.':
-    'Juggernaut only, for now. Whoever plays him, ally or enemy, wears the items you built on your screen, not their own. Only you see this. Works with safe mode off.',
+  'Кто бы ни играл героем, которого ты собрал, союзник или враг, у тебя на экране он будет в твоих предметах, а не в своих. Видишь это только ты. Работает с выключенным безопасным режимом.':
+    'Whoever plays a hero you built, ally or enemy, wears your items on your screen, not their own. Only you see this. Works with safe mode off.',
 
   // ---------- item schema: catalog cards, library tag, conflict banners ----------
   'Моды спорят за один предмет': 'Mods disagree about the same item',

@@ -2,8 +2,8 @@
  * the hero's wearables are dressed as the user's pick, with which files and block, and which are
  * left alone; and the pak holding one model under many paths once.
  *
- * The promise to the user: another player's Juggernaut wears what the user built, not his own items
- * on the user's body, and nothing outside that hero and those slots changes. */
+ * The promise to the user: another player of a hero the user built wears what the user built, not
+ * his own items on the user's body, and nothing outside those heroes and slots changes. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -25,7 +25,7 @@ const item = (id: string, name: string, prefab: string, slot: string, model: str
 const modifier = (fields: Record<string, string>) => `\t\t\t\t"asset_modifier"\n\t\t\t\t{\n${Object.entries(fields).map(([k, v]) => `\t\t\t\t\t"${k}"\t\t"${v}"`).join('\n')}\n\t\t\t\t}`;
 const styles = (...models: string[]) => `\t\t\t\t"styles"\n\t\t\t\t{\n${models.map((m, i) => `\t\t\t\t\t"${i}"\n\t\t\t\t\t{\n\t\t\t\t\t\t"model_player"\t\t"${m}"\n\t\t\t\t\t}`).join('\n')}\n\t\t\t\t}`;
 
-/** Juggernaut as the game has him, cut down: two stock items, and a wearable for each case. */
+/** Juggernaut as the game has him, cut down: two stock items, and a wearable for each case; and Sven's sword. */
 const TABLE = ['"items_game"', '{', '\t"items"', '\t{',
   item('6', "Juggernaut's Mask", 'default_item', 'head', 'models/heroes/juggernaut/jugg_mask.vmdl',
     modifier({ type: 'particle_create', modifier: 'particles/units/heroes/hero_juggernaut/mask_glow.vpcf' })),
@@ -39,6 +39,7 @@ const TABLE = ['"items_game"', '{', '\t"items"', '\t{',
   item('9002', 'Sword of Two Heroes', 'wearable', 'weapon', 'models/items/shared/two/two.vmdl', '', ['juggernaut', 'sven']),
   item('9003', 'Fire Mask', 'wearable', 'head', 'models/items/juggernaut/fire/fire_mask.vmdl'),
   item('9004', 'Juggernaut Persona Blade', 'wearable', 'weapon_persona_1', 'models/items/juggernaut/persona/blade.vmdl'),
+  item('99', "Sven's Sword", 'default_item', 'weapon', 'models/heroes/sven/sven_sword.vmdl', '', ['sven']),
   item('9005', 'Sven Sword', 'wearable', 'weapon', 'models/items/sven/sword/sword.vmdl', '', ['sven']),
   '\t}', '}', ''].join('\n');
 
@@ -88,7 +89,18 @@ test('a slot nothing of ours fills is left alone; one an arcana base fills wears
 test("a block another mod lifted stays that mod's, and a hero not on the list is not touched", () => {
   const lifted: SchemaPatch = { id: '9000', block: item('9000', 'Fire Sword', 'wearable', 'weapon', 'models/items/juggernaut/fire/fire.vmdl').trim(), source: 'Some mod' };
   assert.deepEqual(Object.keys(paths(everyoneWears(TABLE, [swordPick(), lifted], []))), ['6058']);
-  assert.deepEqual(everyoneWears(TABLE, [swordPick()], [], ['sven']), [], 'Sven has no stock item our build fills');
+  assert.deepEqual(everyoneWears(TABLE, [swordPick()], [], ['sven']), [], 'Sven only, and nothing of his is built');
+});
+
+test("every hero the build dresses is done in one go, each hero's wearables in his own pick", () => {
+  const sven: SchemaPatch = { id: '99', block: item('99', "Sven's Sword", 'default_item', 'weapon', 'models/heroes/sven/sven_sword.vmdl', '', ['sven']).trim(),
+    assets: [entryAt('models/heroes/sven/sven_sword.vmdl_c', Buffer.from("the user's sword for Sven"))], source: 'Sven pick' };
+  const jugg = swordPick();
+  const out = everyoneWears(TABLE, [jugg, sven], []);
+  assert.deepEqual(Object.keys(paths(out)).sort(), ['6058', '9000', '9005']);
+  assert.equal(out.find((p) => p.id === '9005')!.assets![0].data, sven.assets![0].data, "Sven's in Sven's pick");
+  assert.equal(out.find((p) => p.id === '9000')!.assets![0].data, jugg.assets![0].data, "Juggernaut's in his");
+  assert.deepEqual(Object.keys(paths(everyoneWears(TABLE, [jugg, sven], [], ['juggernaut']))).sort(), ['6058', '9000'], 'and a list of heroes keeps to it');
 });
 
 test('a file the build already puts at a wearable\'s path wins over the copy', () => {
